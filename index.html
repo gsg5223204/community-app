@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧社區反應系統</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4e73df">
+    <link href="https://jsdelivr.net" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fc; font-family: system-ui, -apple-system, sans-serif; }
+        .card { border: none; box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15); border-radius: 0.5rem; }
+        .preview-img, .preview-video { width: 80px; height: 80px; object-fit: cover; border-radius: 0.25rem; cursor: pointer; }
+        .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1050; }
+        .lightbox img, .lightbox video { max-width: 90%; max-height: 90%; border-radius: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-primary fw-bold">🏢 智慧社區反應系統</h2>
+            <select v-model="role" class="form-select w-auto">
+                <option value="resident">🙋‍♂️ 住戶介面</option>
+                <option value="admin">👨‍💼 管委會介面</option>
+            </select>
+        </div>
+        <div class="row">
+            <div class="col-md-5 mb-4" v-if="role === 'resident'">
+                <div class="card p-4">
+                    <h4 class="mb-3 text-secondary">反應新問題</h4>
+                    <form @submit.prevent="submitIssue">
+                        <div class="mb-3"><label class="form-label">住戶戶別</label><input v-model="form.room" type="text" class="form-control" placeholder="例如：A棟 12樓-2" required></div>
+                        <div class="mb-3"><label class="form-label">類別</label><select v-model="form.category" class="form-select"><option value="公設修繕">公設修繕</option><option value="環境清潔">環境清潔</option><option value="安防 noise">安全與噪音</option><option value="其他">其他</option></select></div>
+                        <div class="mb-3"><label class="form-label">主旨</label><input v-model="form.title" type="text" class="form-control" required></div>
+                        <div class="mb-3"><label class="form-label">說明</label><textarea v-model="form.desc" class="form-control" rows="3" required></textarea></div>
+                        <div class="mb-3">
+                            <label class="form-label">上傳照片 / 影片</label>
+                            <input type="file" class="form-control" accept="image/*,video/*" multiple @change="handleFiles">
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <div v-for="(media, idx) in form.mediaPreviews" :key="idx" class="position-relative">
+                                    <img v-if="media.type==='image'" :src="media.url" class="preview-img">
+                                    <video v-else :src="media.url" class="preview-video"></video>
+                                    <span class="position-absolute top-0 end-0 bg-danger text-white rounded-circle px-1" style="cursor:pointer; font-size:10px" @click="removeMedia(idx)">✕</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">提交反應</button>
+                    </form>
+                </div>
+            </div>
+            <div :class="role === 'resident' ? 'col-md-7' : 'col-12'">
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="text-secondary mb-0">社區反映紀錄</h4>
+                        <select v-model="filterStatus" class="form-select w-auto form-select-sm"><option value="全部">全部狀態</option><option value="待處理">待處理</option><option value="處理中">處理中</option><option value="已結案">已結案</option></select>
+                    </div>
+                    <div v-if="filteredIssues.length === 0" class="text-muted text-center py-4">目前沒有相關紀錄</div>
+                    <div v-for="issue in filteredIssues" :key="issue.id" class="card p-3 mb-3 border-start border-4" :class="statusClass(issue.status)">
+                        <div class="d-flex justify-content-between">
+                            <span class="badge" :class="badgeClass(issue.status)">{{ issue.status }}</span>
+                            <small class="text-muted">{{ issue.date }}</small>
+                        </div>
+                        <h5 class="mt-2 fw-bold">{{ issue.title }} <small class="text-muted" style="font-size:12px">({{ issue.room }} - {{ issue.category }})</small></h5>
+                        <p class="text-dark mb-2">{{ issue.desc }}</p>
+                        <div v-if="issue.media && issue.media.length" class="d-flex gap-2 mb-3">
+                            <div v-for="(m, i) in issue.media" :key="i">
+                                <img v-if="m.type==='image'" :src="m.url" class="preview-img" @click="openLightbox(m)">
+                                <video v-else :src="m.url" class="preview-video" @click="openLightbox(m)"></video>
+                            </div>
+                        </div>
+                        <div class="bg-light p-2 rounded mt-2" v-if="issue.reply || role === 'admin'">
+                            <div v-if="role === 'admin'">
+                                <label class="form-label g-1"><small class="fw-bold">變更進度狀態：</small></label>
+                                <select v-model="issue.status" class="form-select form-select-sm w-auto mb-2" @change="saveData"><option value="待處理">待處理</option><option value="處理中">處理中</option><option value="已結案">已結案</option></select>
+                                <textarea v-model="issue.reply" class="form-control form-control-sm mb-2" placeholder="輸入管委會回覆..."></textarea>
+                                <button class="btn btn-sm btn-success" @click="saveData">儲存更新</button>
+                            </div>
+                            <div v-else>
+                                <small class="text-primary fw-bold">💬 管委會回覆：</small>
+                                <p class="mb-0 text-secondary" style="font-size:14px;">{{ issue.reply || '正在評估處理中，請稍候。' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="lightbox" v-if="lightboxMedia" @click="lightboxMedia = null">
+            <img v-if="lightboxMedia.type==='image'" :src="lightboxMedia.url" @click.stop>
+            <video v-else :src="lightboxMedia.url" controls autoplay @click.stop></video>
+        </div>
+    </div>
+    <script src="https://jsdelivr.net"></script>
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+        createApp({
+            setup() {
+                const role = ref('resident');
+                const filterStatus = ref('全部');
+                const lightboxMedia = ref(null);
+                const issues = ref([]);
+                const form = ref({ room: '', category: '公設修繕', title: '', desc: '', mediaPreviews: [] });
+                onMounted(() => { const saved = localStorage.getItem('community_issues'); if(saved) issues.value = JSON.parse(saved); });
+                const saveData = () => { localStorage.setItem('community_issues', JSON.stringify(issues.value)); };
+                const handleFiles = (e) => {
+                    const files = e.target.files;
+                    for(let file of files) {
+                        const reader = new FileReader();
+                        const type = file.type.startsWith('image/') ? 'image' : 'video';
+                        reader.onload = (event) => { form.value.mediaPreviews.push({ type, url: event.target.result }); };
+                        reader.readAsDataURL(file);
+                    }
+                };
+                const removeMedia = (idx) => { form.value.mediaPreviews.splice(idx, 1); };
+                const submitIssue = () => {
+                    issues.value.unshift({ id: Date.now(), room: form.value.room, category: form.value.category, title: form.value.title, desc: form.value.desc, status: '待處理', date: new Date().toLocaleDateString(), reply: '', media: [...form.value.mediaPreviews] });
+                    saveData();
+                    form.value.title = ''; form.value.desc = ''; form.value.mediaPreviews = [];
+                };
+                const filteredIssues = computed(() => filterStatus.value === '全部' ? issues.value : issues.value.filter(i => i.status === filterStatus.value));
+                const openLightbox = (m) => { lightboxMedia.value = m; };
+                const statusClass = (s) => ({ 'border-warning': s==='待處理', 'border-primary': s==='處理中', 'border-success': s==='已結案' });
+                const badgeClass = (s) => ({ 'bg-warning text-dark': s==='待處理', 'bg-primary': s==='處理中', 'bg-success': s==='已結案' });
+                return { role, filterStatus, lightboxMedia, form, filteredIssues, handleFiles, removeMedia, submitIssue, openLightbox, saveData, statusClass, badgeClass };
+            }
+        }).mount('#app');
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('service-worker.js'); }); }
+    </script>
+</body>
+</html>

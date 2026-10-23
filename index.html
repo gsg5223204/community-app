@@ -718,7 +718,7 @@
           this.residentFiles = [];
           this.residentTab = 'track';
         } catch (err) {
-          alert('送出失敗，請檢查網路連線或金鑰！');
+          alert('送出失敗，詳細原因：\n' + (err.message || JSON.stringify(err)));
         } finally {
           this.submitting = false;
         }

@@ -9,6 +9,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Supabase 官方 JS SDK (保證不卡 CORS、秒級同步) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- FontAwesome 圖示 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
@@ -46,7 +48,7 @@
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
 
     <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步雲端試算表資料...
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步雲端資料...
     </div>
 
     <!-- ================= 住戶前台 ================= -->
@@ -100,7 +102,7 @@
 
           <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
             <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
-            {{ submitting ? '正在寫入雲端試算表...' : '送出反映案件' }}
+            {{ submitting ? '正在送出...' : '送出反映案件' }}
           </button>
         </form>
       </div>
@@ -259,10 +261,11 @@
 </div>
 
 <script>
-  // 透過 Proxy 轉接，徹底消除跨域與轉址問題
-  const RAW_URL = 'https://script.google.com/macros/s/AKfycbwRgjetRtsx7KF0YFOuN3zng2F30wvvTCPjQdZiBvc3xtnMkdT-uih2pMOtMU1MF5zxIQ/exec';
-  const GOOGLE_SCRIPT_URL = 'https://corsproxy.io/?' + encodeURIComponent(RAW_URL);
+  // 👇 請替換為你在 Supabase 後台複製的兩串文字：
+  const SUPABASE_URL = 'https://你的專案ID.supabase.co';
+  const SUPABASE_ANON_KEY = '你的anon_public金鑰';
 
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const { createApp } = Vue;
 
   createApp({
@@ -315,24 +318,32 @@
         }
       },
       async fetchIssues() {
+        if (SUPABASE_URL.includes('你的專案ID')) return;
         this.loading = true;
         try {
-          const res = await fetch(GOOGLE_SCRIPT_URL);
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            this.issues = data.map(item => ({
-              ...item,
-              tempNote: '',
-              tempFinalReply: ''
-            }));
-          }
+          const { data, error } = await supabaseClient
+            .from('issues')
+            .select('*')
+            .order('createdAt', { ascending: false });
+
+          if (error) throw error;
+          this.issues = (data || []).map(item => ({
+            ...item,
+            tempNote: '',
+            tempFinalReply: ''
+          }));
         } catch (err) {
-          console.error('抓取資料失敗：', err);
+          console.error('抓取資料庫失敗：', err);
         } finally {
           this.loading = false;
         }
       },
       async submitIssue() {
+        if (SUPABASE_URL.includes('你的專案ID')) {
+          alert('請先在 index.html 填入 Supabase URL 與 Key！');
+          return;
+        }
+
         const date = new Date();
         const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
         const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
@@ -354,14 +365,11 @@
 
         this.submitting = true;
         try {
-          await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'create', data: newIssue })
-          });
+          const { error } = await supabaseClient.from('issues').insert([newIssue]);
+          if (error) throw error;
 
           this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '' });
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n雲端試算表已完成寫入。`);
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n雲端資料庫已同步更新。`);
           
           this.form.unit = '';
           this.form.phone = '';
@@ -369,20 +377,28 @@
           this.residentTab = 'track';
           this.trackKeyword = caseId;
         } catch (err) {
-          alert('連線失敗，請檢查網路！');
+          console.error(err);
+          alert('送出失敗，請檢查網路連線或金鑰設定！');
         } finally {
           this.submitting = false;
         }
       },
       async syncUpdate(issue) {
         try {
-          await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'update', data: issue })
-          });
+          const { error } = await supabaseClient
+            .from('issues')
+            .update({
+              status: issue.status,
+              assignedTo: issue.assignedTo,
+              internalNotes: issue.internalNotes,
+              finalReply: issue.finalReply,
+              repliedAt: issue.repliedAt
+            })
+            .eq('id', issue.id);
+
+          if (error) throw error;
         } catch (err) {
-          console.error('更新試算表失敗：', err);
+          console.error('更新資料庫失敗：', err);
         }
       },
       assignIssue(issue, role) {

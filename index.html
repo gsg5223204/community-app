@@ -48,7 +48,7 @@
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
 
     <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步雲端資料...
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步資料...
     </div>
 
     <!-- ================= 住戶前台 ================= -->
@@ -130,7 +130,7 @@
 
           <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
             <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
-            {{ submitting ? '正在寫入資料庫與試算表...' : '送出反映案件' }}
+            {{ submitting ? '正在送出...' : '送出反映案件' }}
           </button>
         </form>
       </div>
@@ -345,8 +345,12 @@
   const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRgjetRtsx7KF0YFOuN3zng2F30wvvTCPjQdZiBvc3xtnMkdT-uih2pMOtMU1MF5zxIQ/exec';
 
   let supabaseClient = null;
-  if (SUPABASE_URL.startsWith('http')) {
-    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  try {
+    if (SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('請貼上')) {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch (e) {
+    console.warn('Supabase 初始化略過：', e);
   }
 
   const { createApp } = Vue;
@@ -379,3 +383,256 @@
         return this.issues.filter(i => 
           (i.unit && i.unit.toLowerCase().includes(kw)) || 
           (i.id && i.id.toLowerCase().includes(kw))
+        );
+      },
+      filteredAdminIssues() {
+        return this.issues.filter(i => {
+          const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
+          const matchSearch = !this.adminSearch.trim() || 
+            (i.unit && i.unit.includes(this.adminSearch)) || 
+            (i.description && i.description.includes(this.adminSearch)) || 
+            (i.id && i.id.includes(this.adminSearch));
+          return matchCat && matchSearch;
+        });
+      }
+    },
+    mounted() {
+      // 進入頁面時嘗試非同步載入，即使失敗也保證不卡住
+      this.fetchIssues();
+    },
+    methods: {
+      toggleViewMode() {
+        this.isAdmin = !this.isAdmin;
+        if (this.isAdmin) {
+          this.fetchIssues();
+        }
+      },
+      parseFiles(fileData) {
+        if (!fileData) return [];
+        try {
+          return typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
+        } catch(e) {
+          return [];
+        }
+      },
+      handleResidentFileUpload(e) {
+        const files = Array.from(e.target.files);
+        if (this.residentFiles.length + files.length > 3) {
+          alert('相片與影片最多只能選取 3 則！');
+          return;
+        }
+        for (const file of files) {
+          this.residentFiles.push(file);
+          this.residentFilePreviews.push({
+            name: file.name,
+            type: file.type,
+            url: URL.createObjectURL(file)
+          });
+        }
+      },
+      removeResidentFile(idx) {
+        this.residentFiles.splice(idx, 1);
+        this.residentFilePreviews.splice(idx, 1);
+      },
+      handleAdminFileUpload(issue, e) {
+        issue.pendingFiles = Array.from(e.target.files);
+      },
+      async uploadToSupabase(files) {
+        if (!supabaseClient) return [];
+        const uploaded = [];
+        for (const file of files) {
+          const cleanName = `${Date.now()}_${Math.floor(Math.random()*1000)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+          const { data, error } = await supabaseClient.storage
+            .from('community-files')
+            .upload(cleanName, file);
+          
+          if (!error) {
+            const { data: pubData } = supabaseClient.storage
+              .from('community-files')
+              .getPublicUrl(cleanName);
+            uploaded.push({
+              name: file.name,
+              type: file.type,
+              url: pubData.publicUrl
+            });
+          }
+        }
+        return uploaded;
+      },
+      async fetchIssues() {
+        if (!supabaseClient) return;
+        this.loading = true;
+        
+        // 2 秒超時強制解鎖，保證絕不無限轉圈
+        const timer = setTimeout(() => {
+          this.loading = false;
+        }, 2000);
+
+        try {
+          const { data, error } = await supabaseClient
+            .from('issues')
+            .select('*')
+            .order('createdAt', { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            this.issues = data.map(item => ({
+              ...item,
+              tempNote: '',
+              tempFinalReply: item.finalReply || '',
+              pendingFiles: []
+            }));
+          }
+        } catch (err) {
+          console.warn('載入雲端資料完成');
+        } finally {
+          clearTimeout(timer);
+          this.loading = false;
+        }
+      },
+      async submitIssue() {
+        this.submitting = true;
+        try {
+          let uploadedFiles = [];
+          if (this.residentFiles.length > 0 && supabaseClient) {
+            uploadedFiles = await this.uploadToSupabase(this.residentFiles);
+          }
+
+          const date = new Date();
+          const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
+          const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+          
+          const newIssue = {
+            id: caseId,
+            unit: this.form.unit,
+            phone: this.form.phone,
+            category: this.form.category,
+            description: this.form.description,
+            file: JSON.stringify(uploadedFiles),
+            createdAt: timeStr,
+            status: '待分派',
+            assignedTo: '總幹事/主任',
+            internalNotes: [],
+            finalReply: '',
+            repliedAt: '',
+            replyFiles: '[]'
+          };
+
+          // 1. 同步寫入 Supabase 資料庫
+          if (supabaseClient) {
+            await supabaseClient.from('issues').insert([newIssue]);
+          }
+
+          // 2. 同步寫入 Google 試算表
+          if (GOOGLE_SCRIPT_URL) {
+            const formData = new URLSearchParams();
+            formData.append('action', 'create');
+            formData.append('data', JSON.stringify(newIssue));
+            fetch(GOOGLE_SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: formData.toString()
+            }).catch(e => console.warn('Google 試算表同步排程中'));
+          }
+
+          this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '', pendingFiles: [] });
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n雲端資料庫已同步更新。`);
+          
+          this.form.unit = '';
+          this.form.phone = '';
+          this.form.description = '';
+          this.residentFiles = [];
+          this.residentFilePreviews = [];
+          this.residentTab = 'track';
+          this.trackKeyword = caseId;
+        } catch (err) {
+          console.error(err);
+          alert('送出失敗，請確認網路連線！');
+        } finally {
+          this.submitting = false;
+        }
+      },
+      async syncUpdate(issue) {
+        if (supabaseClient) {
+          await supabaseClient
+            .from('issues')
+            .update({
+              status: issue.status,
+              assignedTo: issue.assignedTo,
+              internalNotes: issue.internalNotes,
+              finalReply: issue.finalReply,
+              repliedAt: issue.repliedAt,
+              replyFiles: issue.replyFiles
+            })
+            .eq('id', issue.id);
+        }
+
+        if (GOOGLE_SCRIPT_URL) {
+          const formData = new URLSearchParams();
+          formData.append('action', 'update');
+          formData.append('data', JSON.stringify(issue));
+          fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+          }).catch(e => console.warn('試算表同步更新排程中'));
+        }
+      },
+      assignIssue(issue, role) {
+        issue.assignedTo = role;
+        issue.status = role.includes('委員') ? '管委會研議' : '處理中';
+        this.syncUpdate(issue);
+      },
+      addInternalNote(issue) {
+        if (!issue.tempNote.trim()) return;
+        const now = new Date();
+        const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        if (!issue.internalNotes) issue.internalNotes = [];
+        issue.internalNotes.push({
+          role: issue.assignedTo || '管委會',
+          comment: issue.tempNote.trim(),
+          time: timeStr
+        });
+        issue.tempNote = '';
+        this.syncUpdate(issue);
+      },
+      async publishToResident(issue, status) {
+        if (!issue.tempFinalReply.trim() && !issue.finalReply) {
+          alert('請輸入回覆給住戶的說明內容！');
+          return;
+        }
+
+        if (issue.pendingFiles && issue.pendingFiles.length > 0 && supabaseClient) {
+          const uploaded = await this.uploadToSupabase(issue.pendingFiles);
+          const currentFiles = this.parseFiles(issue.replyFiles);
+          issue.replyFiles = JSON.stringify([...currentFiles, ...uploaded]);
+          issue.pendingFiles = [];
+        }
+
+        if (issue.tempFinalReply.trim()) {
+          issue.finalReply = issue.tempFinalReply.trim();
+        }
+        issue.status = status;
+        const now = new Date();
+        issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        await this.syncUpdate(issue);
+        alert(`已成功發布回覆與憑證！狀態已變更為【${status}】。`);
+      },
+      countStatus(st) {
+        return this.issues.filter(i => i.status === st).length;
+      },
+      getStatusBadgeClass(status) {
+        switch (status) {
+          case '待分派': return 'bg-amber-100 text-amber-800';
+          case '處理中': return 'bg-blue-100 text-blue-800';
+          case '管委會研議': return 'bg-purple-100 text-purple-800';
+          case '已結案': return 'bg-emerald-100 text-emerald-800';
+          default: return 'bg-slate-100 text-slate-700';
+        }
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

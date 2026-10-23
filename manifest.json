@@ -1,12 +1,1 @@
-{
-  "short_name": "智慧社區",
-  "name": "社區住戶反應與管理系統",
-  "icons": [
-    { "src": "https://flaticon.com", "type": "image/png", "sizes": "512x512" }
-  ],
-  "start_url": "index.html",
-  "background_color": "#4e73df",
-  "theme-color": "#4e73df",
-  "display": "standalone",
-  "orientation": "portrait"
-}
+

@@ -615,7 +615,9 @@
           this.residentFiles = [];
           this.residentTab = 'track';
         } catch (err) {
-          alert('送出失敗，請檢查網路連線或金鑰！');
+          console.error('送出詳細錯誤：', err);
+          const msg = err.message || err.error_description || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+          alert('送出失敗！詳細原因：\n' + msg);
         } finally {
           this.submitting = false;
         }

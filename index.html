@@ -200,12 +200,12 @@
 
       <!-- 後台備份與還原工具列 -->
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
-        <span class="font-bold text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i>本機永久安全儲存模式 (共 {{ issues.length }} 筆案件)</span>
+        <span class="font-bold text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i>本機安全儲存模式 (共 {{ issues.length }} 筆案件)</span>
         <div class="flex gap-2">
-          <button @click="exportBackup" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow transition">
-            <i class="fa-solid fa-download mr-1"></i>匯出完整備份檔
+          <button @click="openExportModal" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow transition flex items-center">
+            <i class="fa-solid fa-file-export mr-1"></i>自訂篩選匯出備份
           </button>
-          <label class="bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded shadow cursor-pointer transition">
+          <label class="bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded shadow cursor-pointer transition flex items-center">
             <i class="fa-solid fa-upload mr-1"></i>匯入還原備份
             <input type="file" accept=".json" @change="importBackup" class="hidden">
           </label>
@@ -356,6 +356,90 @@
 
   </main>
 
+  <!-- ================= 自訂匯出彈窗 (Modal) ================= -->
+  <div v-if="showExportModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-base text-slate-800 flex items-center">
+          <i class="fa-solid fa-file-export text-emerald-600 mr-2"></i>匯出案件備份資料
+        </h3>
+        <button @click="showExportModal = false" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-sm">
+        <!-- 匯出格式 -->
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">匯出格式</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button 
+              type="button" 
+              @click="exportConfig.format = 'csv'" 
+              :class="exportConfig.format === 'csv' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" 
+              class="border rounded p-2 text-center text-xs flex flex-col items-center justify-center">
+              <i class="fa-solid fa-file-excel text-lg text-emerald-600 mb-1"></i>
+              Excel 試算表 (.csv)
+            </button>
+            <button 
+              type="button" 
+              @click="exportConfig.format = 'json'" 
+              :class="exportConfig.format === 'json' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" 
+              class="border rounded p-2 text-center text-xs flex flex-col items-center justify-center">
+              <i class="fa-solid fa-database text-lg text-blue-600 mb-1"></i>
+              完整資料庫 (.json)
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">
+            * 試算表適合列印及 Excel 開啟查閱；資料庫格式則包含照片影音，可用於還原系統。
+          </p>
+        </div>
+
+        <!-- 類別篩選 -->
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">反映類別篩選</label>
+          <select v-model="exportConfig.category" class="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs bg-white outline-none">
+            <option value="">全部類別</option>
+            <option value="公設修繕">公設修繕</option>
+            <option value="環境清潔">環境清潔</option>
+            <option value="違規處理">違規處理</option>
+            <option value="安寧秩序">安寧秩序</option>
+            <option value="管委會建議">管委會建議</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+
+        <!-- 時間範圍 -->
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">案件時間範圍 (留空代表全部)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <span class="text-[11px] text-slate-500">起始日期</span>
+              <input type="date" v-model="exportConfig.startDate" class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
+            </div>
+            <div>
+              <span class="text-[11px] text-slate-500">結束日期</span>
+              <input type="date" v-model="exportConfig.endDate" class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 p-2.5 rounded border border-slate-200 text-xs text-slate-600">
+          預計匯出筆數：<strong class="text-emerald-700">{{ previewExportCount }}</strong> 筆案件
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button @click="showExportModal = false" class="px-3 py-1.5 border border-slate-300 text-slate-600 rounded text-xs hover:bg-slate-50">
+          取消
+        </button>
+        <button @click="executeExport" class="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded text-xs shadow">
+          開始匯出
+        </button>
+      </div>
+    </div>
+  </div>
+
   <footer class="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
     <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
@@ -363,7 +447,6 @@
 </div>
 
 <script>
-  // 前端 Canvas 自動等比例輕量壓縮（避開容量上限、提升載入速度）
   function compressImage(file) {
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/')) {
@@ -406,7 +489,6 @@
 
   createApp({
     data() {
-      // 🚀 同步初始化：Vue 載入的當下直接從硬碟同步讀出，絕不等非同步
       let initialIssues = [];
       try {
         const raw = localStorage.getItem('ZUISHANGJING_ISSUES_DATA');
@@ -429,7 +511,16 @@
           description: ''
         },
         residentFiles: [],
-        issues: initialIssues
+        issues: initialIssues,
+        
+        // 匯出彈窗相關配置
+        showExportModal: false,
+        exportConfig: {
+          format: 'csv',      // 'csv' 試算表 或 'json' 資料庫
+          category: '',      // 類別篩選
+          startDate: '',     // 起始時間 (YYYY-MM-DD)
+          endDate: ''        // 結束時間 (YYYY-MM-DD)
+        }
       };
     },
     computed: {
@@ -450,6 +541,27 @@
             (i.id && i.id.includes(this.adminSearch));
           return matchCat && matchSearch;
         });
+      },
+      // 依彈窗條件篩選後的待匯出案件
+      matchedExportIssues() {
+        return this.issues.filter(item => {
+          // 1. 類別過濾
+          if (this.exportConfig.category && item.category !== this.exportConfig.category) {
+            return false;
+          }
+          // 2. 日期過濾 (以案件的建立時間 createdAt 判定)
+          const itemDate = item.createdAt ? item.createdAt.slice(0, 10) : '';
+          if (this.exportConfig.startDate && itemDate < this.exportConfig.startDate) {
+            return false;
+          }
+          if (this.exportConfig.endDate && itemDate > this.exportConfig.endDate) {
+            return false;
+          }
+          return true;
+        });
+      },
+      previewExportCount() {
+        return this.matchedExportIssues.length;
       }
     },
     methods: {
@@ -511,7 +623,7 @@
           };
 
           this.issues.unshift(newIssue);
-          this.persistSave(); // 立即永久存入硬碟
+          this.persistSave();
 
           alert(`反映單已成功送出！\n\n案件編號：${caseId}\n已安全留存於系統中。`);
           
@@ -561,14 +673,74 @@
         this.persistSave();
         alert(`已成功發布回覆與憑證！狀態已變更為【${status}】。`);
       },
-      exportBackup() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.issues));
-        const dlAnchor = document.createElement('a');
-        dlAnchor.setAttribute("href", dataStr);
-        dlAnchor.setAttribute("download", `最上境社區案件備份_${new Date().toISOString().slice(0,10)}.json`);
-        dlAnchor.click();
-        dlAnchor.remove();
+
+      // 開啟匯出彈窗
+      openExportModal() {
+        this.showExportModal = true;
       },
+
+      // 執行匯出 (依條件轉換為 Excel CSV 或 JSON)
+      executeExport() {
+        const targetList = this.matchedExportIssues;
+        if (targetList.length === 0) {
+          alert('所選篩選條件下無任何案件資料可匯出！');
+          return;
+        }
+
+        const dateTag = new Date().toISOString().slice(0, 10);
+
+        if (this.exportConfig.format === 'csv') {
+          // 轉為 Excel 試算表格式 (CSV)
+          const headers = ['案件編號', '戶號', '聯絡電話', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '住戶附件數量', '回覆附件數量'];
+          
+          const csvRows = targetList.map(item => {
+            const escapeField = (val) => {
+              if (val === null || val === undefined) return '""';
+              const str = String(val).replace(/"/g, '""');
+              return `"${str}"`;
+            };
+
+            const notesText = (item.internalNotes || []).map(n => `[${n.role}] ${n.comment} (${n.time})`).join('；');
+
+            return [
+              escapeField(item.id),
+              escapeField(item.unit),
+              escapeField(item.phone),
+              escapeField(item.category),
+              escapeField(item.description),
+              escapeField(item.createdAt),
+              escapeField(item.status),
+              escapeField(item.assignedTo),
+              escapeField(notesText),
+              escapeField(item.finalReply),
+              escapeField(item.repliedAt),
+              escapeField((item.files || []).length),
+              escapeField((item.replyFiles || []).length)
+            ].join(',');
+          });
+
+          // 加入 UTF-8 BOM (\uFEFF) 讓 Excel 打開中文時絕不亂碼
+          const csvContent = '\uFEFF' + [headers.join(','), ...csvRows].join('\r\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `最上境社區案件報表_${dateTag}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          // 轉為完整資料庫格式 (JSON，包含所有影音資料)
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetList, null, 2));
+          const dlAnchor = document.createElement('a');
+          dlAnchor.setAttribute("href", dataStr);
+          dlAnchor.setAttribute("download", `最上境社區資料庫備份_${dateTag}.json`);
+          dlAnchor.click();
+          dlAnchor.remove();
+        }
+
+        this.showExportModal = false;
+      },
+
       importBackup(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -579,7 +751,7 @@
             if (Array.isArray(imported)) {
               this.issues = imported;
               this.persistSave();
-              alert('備份還原成功！所有相片與案件紀錄已完整載入。');
+              alert('備份還原成功！所有案件與紀錄已完整載入。');
             }
           } catch(err) {
             alert('檔案格式錯誤，無法還原！');

@@ -182,4 +182,240 @@
         <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center text-xs">
             <span class="font-mono text-slate-500">{{ issue.id }} | {{ issue.createdAt }}</span>
-            <span :class="getStatusBadgeClass(issue.status)" class="font-bold px
+            <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
+          </div>
+
+          <div class="p-4 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-base text-slate-800">{{ issue.unit }}</span>
+                <span class="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ issue.category }}</span>
+              </div>
+              <div class="text-xs text-slate-500">電話：{{ issue.phone || '未留' }}</div>
+            </div>
+            
+            <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
+
+            <div class="bg-amber-50/60 border border-amber-200/80 rounded p-3 text-xs space-y-2">
+              <div class="font-semibold text-amber-900 flex items-center justify-between">
+                <span><i class="fa-solid fa-arrows-split-up-and-left mr-1"></i>內部協處流程</span>
+                <span class="text-[11px] text-amber-700">目前分派至：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
+              </div>
+
+              <div class="flex flex-wrap gap-2 items-center pt-1">
+                <span class="text-slate-600">更換指派：</span>
+                <select @change="assignIssue(issue, $event.target.value)" class="border border-slate-300 rounded px-2 py-1 text-xs bg-white">
+                  <option disabled selected value="">選擇分派對象</option>
+                  <option value="總幹事/主任">總幹事/主任</option>
+                  <option value="主任委員意見">主任委員意見</option>
+                  <option value="財務委員意見">財務委員意見</option>
+                  <option value="設備委員意見">設備委員意見</option>
+                  <option value="安全委員意見">安全委員意見</option>
+                  <option value="環保委員意見">環保委員意見</option>
+                  <option value="總務委員意見">總務委員意見</option>
+                  <option value="文康委員意見">文康委員意見</option>
+                </select>
+              </div>
+
+              <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200/60">
+                <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700">
+                  • <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span>
+                </div>
+              </div>
+
+              <div class="flex gap-2 pt-1">
+                <input v-model="issue.tempNote" placeholder="委員/廠商內部回饋意見..." class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs outline-none">
+                <button @click="addInternalNote(issue)" class="bg-amber-600 text-white px-2.5 py-1 rounded text-xs hover:bg-amber-700">記下</button>
+              </div>
+            </div>
+
+            <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
+              <div class="font-bold text-emerald-900 flex items-center">
+                <i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布 (住戶可見)
+              </div>
+              <textarea v-model="issue.tempFinalReply" rows="2" placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." class="w-full border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"></textarea>
+              <div class="flex justify-end gap-2">
+                <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1 rounded text-xs">
+                  更新進度 (維持處理中)
+                </button>
+                <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 rounded text-xs shadow-sm">
+                  正式結案並發布
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= 頁尾 ================= -->
+  <footer class="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
+    <div>最上境社區管理委員會 &copy; 2026</div>
+  </footer>
+
+</div>
+
+<script>
+  const { createApp } = Vue;
+
+  createApp({
+    data() {
+      return {
+        isAdmin: false,
+        residentTab: 'submit',
+        trackKeyword: '',
+        adminSearch: '',
+        adminFilterCategory: '',
+        form: {
+          unit: '',
+          phone: '',
+          category: '公設修繕',
+          description: '',
+          file: null
+        },
+        issues: [
+          {
+            id: 'CASE-202610-001',
+            unit: 'B棟 8樓之1',
+            phone: '0912-345-678',
+            category: '公設修繕',
+            description: '地下二樓停車場 B2-15 號車位上方排水管道疑似有滲水微滴情形，請派工勘驗。',
+            createdAt: '2026-10-22 09:30',
+            status: '已結案',
+            assignedTo: '設備委員意見',
+            internalNotes: [
+              { role: '設備委員意見', comment: '已會同廠商至現場檢視，為冷氣排水管保溫棉受潮微漏，已重新施作完畢。', time: '10/22 15:30' }
+            ],
+            tempNote: '',
+            finalReply: '感謝住戶通報！經廠商會同現場查驗，係冷排管保溫層受潮產生冷凝水滴落，已完成封膠與保溫材更換，目前功能正常無漏水。',
+            repliedAt: '2026-10-23 10:15',
+            tempFinalReply: ''
+          },
+          {
+            id: 'CASE-202610-002',
+            unit: 'A棟 15樓之2',
+            phone: '0988-111-222',
+            category: '安寧秩序',
+            description: '深夜 23:30 過後頂樓或樓上時常有規律重物碰撞聲響，已影響睡眠。',
+            createdAt: '2026-10-23 08:10',
+            status: '管委會研議',
+            assignedTo: '安全委員意見',
+            internalNotes: [
+              { role: '總幹事/主任', comment: '已會同保全巡視頂樓加壓馬達，機械震動正常。安排排程夜巡。', time: '10/23 09:40' }
+            ],
+            tempNote: '',
+            finalReply: '',
+            repliedAt: '',
+            tempFinalReply: ''
+          }
+        ]
+      };
+    },
+    computed: {
+      filteredResidentIssues() {
+        if (!this.trackKeyword.trim()) return this.issues;
+        const kw = this.trackKeyword.trim().toLowerCase();
+        return this.issues.filter(i => 
+          (i.unit && i.unit.toLowerCase().includes(kw)) || 
+          (i.id && i.id.toLowerCase().includes(kw))
+        );
+      },
+      filteredAdminIssues() {
+        return this.issues.filter(i => {
+          const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
+          const matchSearch = !this.adminSearch.trim() || 
+            (i.unit && i.unit.includes(this.adminSearch)) || 
+            (i.description && i.description.includes(this.adminSearch)) || 
+            (i.id && i.id.includes(this.adminSearch));
+          return matchCat && matchSearch;
+        });
+      }
+    },
+    methods: {
+      toggleViewMode() {
+        this.isAdmin = !this.isAdmin;
+      },
+      handleFileUpload(e) {
+        this.form.file = e.target.files[0] || null;
+      },
+      filterTrack() {
+        // 觸發 computed 計算
+      },
+      submitIssue() {
+        const date = new Date();
+        const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
+        const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+        
+        const newIssue = {
+          id: caseId,
+          unit: this.form.unit,
+          phone: this.form.phone,
+          category: this.form.category,
+          description: this.form.description,
+          createdAt: timeStr,
+          status: '待分派',
+          assignedTo: '總幹事/主任',
+          internalNotes: [],
+          tempNote: '',
+          finalReply: '',
+          repliedAt: '',
+          tempFinalReply: ''
+        };
+
+        this.issues.unshift(newIssue);
+        alert(`反映單已成功送出！\n\n您的案件編號為：${caseId}\n已自動為您切換至「進度查詢」查看處理狀態。`);
+        
+        this.form.unit = '';
+        this.form.phone = '';
+        this.form.description = '';
+        this.residentTab = 'track';
+        this.trackKeyword = caseId;
+      },
+      assignIssue(issue, role) {
+        issue.assignedTo = role;
+        issue.status = role.includes('委員') ? '管委會研議' : '處理中';
+      },
+      addInternalNote(issue) {
+        if (!issue.tempNote.trim()) return;
+        const now = new Date();
+        const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        if (!issue.internalNotes) issue.internalNotes = [];
+        issue.internalNotes.push({
+          role: issue.assignedTo || '管委會',
+          comment: issue.tempNote.trim(),
+          time: timeStr
+        });
+        issue.tempNote = '';
+      },
+      publishToResident(issue, status) {
+        if (!issue.tempFinalReply.trim() && !issue.finalReply) {
+          alert('請輸入回覆給住戶的說明內容！');
+          return;
+        }
+        if (issue.tempFinalReply.trim()) {
+          issue.finalReply = issue.tempFinalReply.trim();
+        }
+        issue.status = status;
+        const now = new Date();
+        issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        alert(`已成功發布回覆並更新案件為【${status}】！住戶端已可查閱。`);
+      },
+      countStatus(st) {
+        return this.issues.filter(i => i.status === st).length;
+      },
+      getStatusBadgeClass(status) {
+        switch (status) {
+          case '待分派': return 'bg-amber-100 text-amber-800';
+          case '處理中': return 'bg-blue-100 text-blue-800';
+          case '管委會研議': return 'bg-purple-100 text-purple-800';
+          case '已結案': return 'bg-emerald-100 text-emerald-800';
+          default: return 'bg-slate-100 text-slate-700';
+        }
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

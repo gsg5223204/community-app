@@ -401,7 +401,8 @@
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          const maxDim = 1200;
+          // 將最大邊長限制在 960px，兼具清晰度與超輕量化
+          const maxDim = 960;
           if (width > maxDim || height > maxDim) {
             if (width > height) {
               height = Math.round((height * maxDim) / width);
@@ -415,7 +416,9 @@
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          resolve({ name: file.name, type: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.7) });
+          // 品質設為 0.6，單張照片僅約 100KB~200KB，資料庫可瞬間寫入
+          const compressedData = canvas.toDataURL('image/jpeg', 0.6);
+          resolve({ name: file.name, type: 'image/jpeg', data: compressedData });
         };
       };
       reader.readAsDataURL(file);

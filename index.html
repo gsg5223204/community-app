@@ -215,7 +215,7 @@
       </div>
     </div>
 
-    <!-- ================= 管理後台 (含完整看板、篩選、協處流程) ================= -->
+    <!-- ================= 管理後台 ================= -->
     <div v-if="isAdmin" class="space-y-6">
 
       <!-- 工具列 -->
@@ -412,13 +412,16 @@
             </button>
             <button 
               type="button" 
-              @click="exportConfig.format = 'json'" 
-              :class="exportConfig.format === 'json' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" 
+              @click="exportConfig.format = 'html'" 
+              :class="exportConfig.format === 'html' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" 
               class="border rounded p-2 text-center text-xs flex flex-col items-center justify-center">
-              <i class="fa-solid fa-database text-lg text-blue-600 mb-1"></i>
-              完整資料庫 (.json)
+              <i class="fa-solid fa-images text-lg text-blue-600 mb-1"></i>
+              圖文可視化報表 (.html)
             </button>
           </div>
+          <p class="text-[11px] text-slate-400 mt-1">
+            * 試算表適合 Excel 統計；圖文報表點開即見照片影片，可直接列印為 PDF。
+          </p>
         </div>
 
         <div>
@@ -759,31 +762,15 @@
         const dateTag = new Date().toISOString().slice(0, 10);
 
         if (this.exportConfig.format === 'csv') {
-          const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '相片影音數量', '回覆檔案數量'];
-          
+          // 📊 格式 1：Excel 試算表 (CSV)
+          const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間'];
           const csvRows = targetList.map(item => {
-            const escapeField = (val) => {
-              if (val === null || val === undefined) return '""';
-              const str = String(val).replace(/"/g, '""');
-              return `"${str}"`;
-            };
-
+            const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
             const notesText = (item.internalNotes || []).map(n => `[${n.role}] ${n.comment} (${n.time})`).join('；');
-
             return [
-              escapeField(item.id),
-              escapeField(item.unit),
-              escapeField(item.queryPassword),
-              escapeField(item.category),
-              escapeField(item.description),
-              escapeField(item.createdAt),
-              escapeField(item.status),
-              escapeField(item.assignedTo),
-              escapeField(notesText),
-              escapeField(item.finalReply),
-              escapeField(item.repliedAt),
-              escapeField((item.files || []).length),
-              escapeField((item.replyFiles || []).length)
+              esc(item.id), esc(item.unit), esc(item.queryPassword), esc(item.category),
+              esc(item.description), esc(item.createdAt), esc(item.status), esc(item.assignedTo),
+              esc(notesText), esc(item.finalReply), esc(item.repliedAt)
             ].join(',');
           });
 
@@ -795,13 +782,53 @@
           a.download = `最上境社區案件報表_${dateTag}.csv`;
           a.click();
           URL.revokeObjectURL(url);
+
         } else {
-          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(targetList, null, 2));
-          const dlAnchor = document.createElement('a');
-          dlAnchor.setAttribute("href", dataStr);
-          dlAnchor.setAttribute("download", `最上境社區資料庫備份_${dateTag}.json`);
-          dlAnchor.click();
-          dlAnchor.remove();
+          // 🖼️ 格式 2：圖文視覺化報表 (.html)
+          const cardsHtml = targetList.map(item => `
+            <div style="border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;font-family:sans-serif;">
+              <div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px;">
+                <span style="font-weight:bold;color:#065f46;">${item.id} | ${item.unit} (${item.category})</span>
+                <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:bold;">${item.status}</span>
+              </div>
+              <p style="color:#334155;margin:8px 0;line-height:1.5;"><strong>反映說明：</strong>${item.description}</p>
+              
+              ${(item.files && item.files.length > 0) ? `
+                <div style="margin:10px 0;">
+                  <strong style="font-size:12px;color:#64748b;">住戶檢附相片／影片：</strong>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                    ${item.files.map(f => f.type.startsWith('image') 
+                      ? `<img src="${f.data}" style="width:160px;height:100px;object-fit:cover;border-radius:4px;border:1px solid #ccc;">`
+                      : `<video src="${f.data}" controls style="width:160px;height:100px;border-radius:4px;border:1px solid #ccc;"></video>`
+                    ).join('')}
+                  </div>
+                </div>
+              ` : ''}
+
+              <div style="background:#f8fafc;border-left:4px solid #10b981;padding:10px;margin-top:10px;border-radius:0 4px 4px 0;">
+                <div style="font-weight:bold;font-size:13px;color:#0f172a;">管委會回覆 (${item.repliedAt || '未回覆'})：</div>
+                <div style="color:#334155;font-size:13px;margin-top:4px;">${item.finalReply || '尚無回覆紀錄'}</div>
+                ${(item.replyFiles && item.replyFiles.length > 0) ? `
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                    ${item.replyFiles.map(rf => rf.type.startsWith('image')
+                      ? `<img src="${rf.data}" style="width:140px;height:90px;object-fit:cover;border-radius:4px;border:1px solid #99f6e4;">`
+                      : `<video src="${rf.data}" controls style="width:140px;height:90px;border-radius:4px;"></video>`
+                    ).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:8px;">提出時間：${item.createdAt} | 查詢密碼：${item.queryPassword}</div>
+            </div>
+          `).join('');
+
+          const fullHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>最上境社區案件報表</title></head><body style="background:#f1f5f9;padding:24px;max-width:800px;margin:auto;"><h2 style="color:#065f46;text-align:center;">最上境社區 - 案件與佐證報表 (${dateTag})</h2>${cardsHtml}</body></html>`;
+
+          const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `最上境社區案件可視化報表_${dateTag}.html`;
+          a.click();
+          URL.revokeObjectURL(url);
         }
 
         this.showExportModal = false;

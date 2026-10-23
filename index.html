@@ -301,18 +301,39 @@
               </div>
             </div>
 
-            <!-- 主任回覆區 -->
+            <!-- 主任回覆區（支援相片、影片、文件最多 5 則） -->
             <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
               <div class="font-bold text-emerald-900 flex items-center justify-between">
                 <span><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布 (住戶可見)</span>
               </div>
               <textarea v-model="issue.tempFinalReply" rows="2" placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." class="w-full border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"></textarea>
               
+              <!-- 擴充至最多 5 個檔案 -->
               <div>
-                <label class="block text-slate-700 font-medium mb-1">附加處置憑證 / 相片 / 影片 / 報告檔案：</label>
-                <input type="file" multiple @change="handleAdminFileUpload(issue, $event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-100 file:text-emerald-800">
-                <div v-if="issue.pendingFiles && issue.pendingFiles.length > 0" class="text-[11px] text-emerald-700 mt-1">
-                  待上傳附件共 {{ issue.pendingFiles.length }} 個檔案
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-slate-700 font-medium">附加處置憑證 / 相片 / 影片 / 檔案 (最多 5 個)：</label>
+                  <span class="text-[11px]" :class="(issue.pendingFiles?.length || 0) >= 5 ? 'text-amber-600 font-bold' : 'text-slate-400'">
+                    待上傳：{{ issue.pendingFiles?.length || 0 }} / 5
+                  </span>
+                </div>
+
+                <input 
+                  type="file" 
+                  multiple 
+                  :disabled="(issue.pendingFiles?.length || 0) >= 5"
+                  @change="handleAdminFileUpload(issue, $event)" 
+                  class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-100 file:text-emerald-800 disabled:opacity-50">
+
+                <!-- 待上傳縮圖及檔案清單預覽 -->
+                <div v-if="issue.pendingFilePreviews && issue.pendingFilePreviews.length > 0" class="grid grid-cols-5 gap-1.5 mt-2">
+                  <div v-for="(p, pIdx) in issue.pendingFilePreviews" :key="pIdx" class="relative group rounded border border-slate-300 aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
+                    <img v-if="p.type.startsWith('image')" :src="p.url" class="w-full h-full object-cover">
+                    <video v-else-if="p.type.startsWith('video')" :src="p.url" class="w-full h-full object-cover"></video>
+                    <div v-else class="text-[10px] text-white p-1 text-center truncate w-full">{{ p.name }}</div>
+                    <button type="button" @click="removeAdminPendingFile(issue, pIdx)" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
+                      <i class="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -339,7 +360,7 @@
 </div>
 
 <script>
-  // 👇 請於 346 與 347 行填妥你的 Supabase 設定：
+  // 👇 請於 352 與 353 行填妥你的 Supabase 設定：
   const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
   const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRgjetRtsx7KF0YFOuN3zng2F30wvvTCPjQdZiBvc3xtnMkdT-uih2pMOtMU1MF5zxIQ/exec';
@@ -357,6 +378,12 @@
 
   createApp({
     data() {
+      let saved = [];
+      try {
+        const local = localStorage.getItem('community_issues');
+        if (local) saved = JSON.parse(local);
+      } catch(e) {}
+
       return {
         isAdmin: false,
         residentTab: 'submit',
@@ -373,7 +400,7 @@
         },
         residentFiles: [],
         residentFilePreviews: [],
-        issues: []
+        issues: saved
       };
     },
     computed: {
@@ -397,15 +424,16 @@
       }
     },
     mounted() {
-      // 進入頁面時嘗試非同步載入，即使失敗也保證不卡住
       this.fetchIssues();
     },
     methods: {
+      saveLocal() {
+        try {
+          localStorage.setItem('community_issues', JSON.stringify(this.issues));
+        } catch(e) {}
+      },
       toggleViewMode() {
         this.isAdmin = !this.isAdmin;
-        if (this.isAdmin) {
-          this.fetchIssues();
-        }
       },
       parseFiles(fileData) {
         if (!fileData) return [];
@@ -435,7 +463,27 @@
         this.residentFilePreviews.splice(idx, 1);
       },
       handleAdminFileUpload(issue, e) {
-        issue.pendingFiles = Array.from(e.target.files);
+        if (!issue.pendingFiles) issue.pendingFiles = [];
+        if (!issue.pendingFilePreviews) issue.pendingFilePreviews = [];
+        
+        const files = Array.from(e.target.files);
+        if (issue.pendingFiles.length + files.length > 5) {
+          alert('主任處置憑證/檔案最多只能上傳 5 個！');
+          return;
+        }
+
+        for (const file of files) {
+          issue.pendingFiles.push(file);
+          issue.pendingFilePreviews.push({
+            name: file.name,
+            type: file.type,
+            url: URL.createObjectURL(file)
+          });
+        }
+      },
+      removeAdminPendingFile(issue, idx) {
+        issue.pendingFiles.splice(idx, 1);
+        issue.pendingFilePreviews.splice(idx, 1);
       },
       async uploadToSupabase(files) {
         if (!supabaseClient) return [];
@@ -463,7 +511,6 @@
         if (!supabaseClient) return;
         this.loading = true;
         
-        // 2 秒超時強制解鎖，保證絕不無限轉圈
         const timer = setTimeout(() => {
           this.loading = false;
         }, 2000);
@@ -474,13 +521,15 @@
             .select('*')
             .order('createdAt', { ascending: false });
 
-          if (!error && Array.isArray(data)) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             this.issues = data.map(item => ({
               ...item,
               tempNote: '',
               tempFinalReply: item.finalReply || '',
-              pendingFiles: []
+              pendingFiles: [],
+              pendingFilePreviews: []
             }));
+            this.saveLocal();
           }
         } catch (err) {
           console.warn('載入雲端資料完成');
@@ -517,12 +566,10 @@
             replyFiles: '[]'
           };
 
-          // 1. 同步寫入 Supabase 資料庫
           if (supabaseClient) {
             await supabaseClient.from('issues').insert([newIssue]);
           }
 
-          // 2. 同步寫入 Google 試算表
           if (GOOGLE_SCRIPT_URL) {
             const formData = new URLSearchParams();
             formData.append('action', 'create');
@@ -535,8 +582,9 @@
             }).catch(e => console.warn('Google 試算表同步排程中'));
           }
 
-          this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '', pendingFiles: [] });
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n雲端資料庫已同步更新。`);
+          this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '', pendingFiles: [], pendingFilePreviews: [] });
+          this.saveLocal();
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n資料庫與 Google 試算表已同步更新。`);
           
           this.form.unit = '';
           this.form.phone = '';
@@ -553,6 +601,7 @@
         }
       },
       async syncUpdate(issue) {
+        this.saveLocal();
         if (supabaseClient) {
           await supabaseClient
             .from('issues')
@@ -608,6 +657,7 @@
           const currentFiles = this.parseFiles(issue.replyFiles);
           issue.replyFiles = JSON.stringify([...currentFiles, ...uploaded]);
           issue.pendingFiles = [];
+          issue.pendingFilePreviews = [];
         }
 
         if (issue.tempFinalReply.trim()) {

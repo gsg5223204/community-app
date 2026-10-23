@@ -93,14 +93,14 @@
 
           <div>
             <div class="flex justify-between items-center mb-1">
-              <label class="block text-sm font-medium text-slate-700">檢附相片 / 影片 (最多 3 則)</label>
+              <label class="block text-sm font-medium text-slate-700">檢附相片 / 影片 (最多 3 則，點擊圖片可放大)</label>
               <span class="text-xs text-slate-400">已選取 {{ residentFiles.length }} / 3</span>
             </div>
             <input type="file" accept="image/*,video/*" multiple @change="handleResidentFileUpload" :disabled="residentFiles.length >= 3" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50">
             <div v-if="residentFiles.length > 0" class="grid grid-cols-3 gap-2 mt-3">
               <div v-for="(item, idx) in residentFiles" :key="idx" class="relative rounded border bg-slate-900 aspect-video flex items-center justify-center overflow-hidden">
-                <img v-if="item.type.startsWith('image')" :src="item.data" class="w-full h-full object-cover">
-                <video v-else :src="item.data" class="w-full h-full object-cover"></video>
+                <img v-if="item.type.startsWith('image')" :src="item.data" @click="previewImageUrl = item.data" class="w-full h-full object-cover cursor-pointer">
+                <video v-else :src="item.data" controls class="w-full h-full object-cover"></video>
                 <button type="button" @click="residentFiles.splice(idx, 1)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-xmark"></i></button>
               </div>
             </div>
@@ -147,7 +147,7 @@
 
           <div v-if="issue.files && issue.files.length > 0" class="grid grid-cols-3 gap-2 mb-3">
             <div v-for="(f, i) in issue.files" :key="i" class="rounded overflow-hidden border aspect-video bg-black flex items-center justify-center">
-              <img v-if="f.type.startsWith('image')" :src="f.data" class="w-full h-full object-cover">
+              <img v-if="f.type.startsWith('image')" :src="f.data" @click="previewImageUrl = f.data" class="w-full h-full object-cover cursor-pointer">
               <video v-else :src="f.data" controls class="w-full h-full object-cover"></video>
             </div>
           </div>
@@ -160,7 +160,7 @@
               <p class="whitespace-pre-line">{{ issue.finalReply }}</p>
               <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2 pt-2 border-t border-emerald-200">
                 <div v-for="(rf, rIdx) in issue.replyFiles" :key="rIdx" class="rounded border aspect-video bg-black flex items-center justify-center overflow-hidden">
-                  <img v-if="rf.type.startsWith('image')" :src="rf.data" class="w-full h-full object-cover">
+                  <img v-if="rf.type.startsWith('image')" :src="rf.data" @click="previewImageUrl = rf.data" class="w-full h-full object-cover cursor-pointer">
                   <video v-else :src="rf.data" controls class="w-full h-full object-cover"></video>
                 </div>
               </div>
@@ -236,10 +236,10 @@
             <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
 
             <div v-if="issue.files && issue.files.length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
-              <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片：</div>
+              <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片 (點擊放大)：</div>
               <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 <div v-for="(f, fi) in issue.files" :key="fi" class="rounded overflow-hidden border aspect-video bg-black flex items-center justify-center">
-                  <img v-if="f.type.startsWith('image')" :src="f.data" class="w-full h-full object-cover">
+                  <img v-if="f.type.startsWith('image')" :src="f.data" @click="previewImageUrl = f.data" class="w-full h-full object-cover cursor-pointer">
                   <video v-else :src="f.data" controls class="w-full h-full object-cover"></video>
                 </div>
               </div>
@@ -285,11 +285,12 @@
               <textarea v-model="issue.tempFinalReply" rows="2" placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." class="w-full border rounded p-2 text-xs outline-none"></textarea>
               
               <div>
-                <input type="file" multiple :disabled="(issue.replyFiles?.length || 0) >= 5" @change="handleAdminFileUpload(issue, $event)" class="w-full text-xs text-slate-500">
+                <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
+                <input type="file" multiple accept="image/*,video/*" :disabled="(issue.replyFiles?.length || 0) >= 5" @change="handleAdminFileUpload(issue, $event)" class="w-full text-xs text-slate-500">
                 <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-5 gap-1.5 mt-2">
                   <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded border aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-                    <img v-if="p.type.startsWith('image')" :src="p.data" class="w-full h-full object-cover">
-                    <video v-else :src="p.data" class="w-full h-full object-cover"></video>
+                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="previewImageUrl = p.data" class="w-full h-full object-cover cursor-pointer">
+                    <video v-else :src="p.data" controls class="w-full h-full object-cover"></video>
                     <button type="button" @click="issue.replyFiles.splice(pIdx, 1); syncUpdate(issue);" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
@@ -310,6 +311,14 @@
       </div>
     </div>
   </main>
+
+  <!-- 圖片放大預覽燈箱 (Modal) -->
+  <div v-if="previewImageUrl" @click="previewImageUrl = null" class="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-2 sm:p-4 cursor-zoom-out">
+    <button @click.stop="previewImageUrl = null" class="absolute top-4 right-4 text-white text-3xl hover:text-slate-300 w-10 h-10 flex items-center justify-center">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <img :src="previewImageUrl" @click.stop class="max-w-full max-h-[90vh] object-contain rounded shadow-2xl">
+  </div>
 
   <!-- 匯出彈窗 -->
   <div v-if="showExportModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -368,11 +377,11 @@
     <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
 </div>
-<script>
+  <script>
   // 🔐 後台管理者密碼
   const ADMIN_PASSWORD = '8888';
 
-  // ☁️ 請在此處填入你的 Supabase 設定：
+  // ☁️ 你的 Supabase 設定
   const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
 
@@ -383,49 +392,6 @@
     }
   } catch (e) {
     console.warn('Supabase 初始化略過：', e);
-  }
-
- function compressImage(file) {
-    return new Promise((resolve) => {
-      // 排除影片，避免巨量封包塞爆連線
-      if (file.type.startsWith('video/')) {
-        alert('提醒：因資料庫即時傳輸考量，暫不支援直接上傳影片檔案，請改以相片呈現或提供影片連結。');
-        resolve(null);
-        return;
-      }
-
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          
-          // 極速尺寸：最大邊長 640px（手機與電腦螢幕查看已非常清楚）
-          const maxDim = 640;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // 品質 0.5：檔案大小降至 30~50KB，傳輸只需 0.2 秒
-          const compressedData = canvas.toDataURL('image/jpeg', 0.5);
-          resolve({ name: file.name, type: 'image/jpeg', data: compressedData });
-        };
-      };
-      reader.readAsDataURL(file);
-    });
   }
 
   const { createApp } = Vue;
@@ -441,6 +407,7 @@
         adminFilterCategory: '',
         loading: false,
         submitting: false,
+        previewImageUrl: null, // 點擊放大相片燈箱變數
         form: {
           unit: '',
           queryPassword: '',
@@ -529,6 +496,7 @@
         this.trackKeyword = '';
         this.trackPassword = '';
       },
+      // 住戶端上傳直傳 Storage
       async handleResidentFileUpload(e) {
         const files = Array.from(e.target.files);
         if (this.residentFiles.length + files.length > 3) {
@@ -537,43 +505,38 @@
         }
 
         for (const file of files) {
-          // 限制檔案大小在 25MB 以內，避免手機連線逾時
           if (file.size > 25 * 1024 * 1024) {
             alert(`檔案「${file.name}」超過 25MB，請截短影片或重新壓縮後再上傳！`);
             continue;
           }
 
           try {
-            // 產生唯一檔名
             const ext = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
             const filePath = `resident/${fileName}`;
 
-            // 1. 直接上傳至 Supabase Storage 儲存桶
             const { data, error } = await supabaseClient.storage
               .from('community-files')
               .upload(filePath, file);
 
             if (error) throw error;
 
-            // 2. 取得公開網址
             const { data: { publicUrl } } = supabaseClient.storage
               .from('community-files')
               .getPublicUrl(filePath);
 
-            // 3. 存入陣列 (只存網址，不再存大容量代碼，秒速寫入)
             this.residentFiles.push({
               name: file.name,
               type: file.type.startsWith('video') ? 'video/mp4' : 'image/jpeg',
               data: publicUrl
             });
-
           } catch (err) {
             console.error('上傳失敗：', err);
             alert(`「${file.name}」上傳失敗，請確認 Storage 權限設定！`);
           }
         }
       },
+      // 主任後台附件直傳 Storage
       async handleAdminFileUpload(issue, e) {
         if (!issue.replyFiles) issue.replyFiles = [];
         const files = Array.from(e.target.files);
@@ -581,9 +544,41 @@
           alert('處置紀錄檔案最多只能上傳 5 個！');
           return;
         }
+
         for (const file of files) {
-          const res = await compressImage(file);
-          if (res) issue.replyFiles.push(res);
+          if (file.size > 25 * 1024 * 1024) {
+            alert(`檔案「${file.name}」超過 25MB，請截短或壓縮後再上傳！`);
+            continue;
+          }
+
+          try {
+            const ext = file.name.split('.').pop();
+            const fileName = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+            const filePath = `admin/${fileName}`;
+
+            const { data, error } = await supabaseClient.storage
+              .from('community-files')
+              .upload(filePath, file);
+
+            if (error) throw error;
+
+            const { data: { publicUrl } } = supabaseClient.storage
+              .from('community-files')
+              .getPublicUrl(filePath);
+
+            let fileType = 'application/octet-stream';
+            if (file.type.startsWith('image')) fileType = 'image/jpeg';
+            else if (file.type.startsWith('video')) fileType = 'video/mp4';
+
+            issue.replyFiles.push({
+              name: file.name,
+              type: fileType,
+              data: publicUrl
+            });
+          } catch (err) {
+            console.error('後台檔案上傳失敗：', err);
+            alert(`「${file.name}」上傳失敗，請檢查網路或 Storage 權限！`);
+          }
         }
         this.syncUpdate(issue);
       },

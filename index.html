@@ -1,4 +1,555 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>最上境社區 - 住戶線上共好反映系統</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- FontAwesome 圖示 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- QRCode.js (自動生成列印用 QR Code) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    [v-cloak] { display: none; }
+    input, select, textarea, button { font-size: 16px !important; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased font-sans">
+<div id="app" v-cloak class="min-h-screen flex flex-col justify-between">
+
+  <!-- ================= 頂部導航 ================= -->
+  <header class="bg-emerald-800 text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-building-circle-check text-2xl text-emerald-300"></i>
+        <div>
+          <h1 class="text-base font-bold tracking-wider">最上境社區</h1>
+          <p class="text-xs text-emerald-200">免安裝線上反映系統</p>
+        </div>
+      </div>
+      <button v-if="isAdmin" @click="logoutAdmin" class="text-xs bg-red-700/80 hover:bg-red-700 px-3 py-1.5 rounded-full transition">
+        <i class="fa-solid fa-right-from-bracket mr-1"></i>登出後台
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= 主內容區 ================= -->
+  <main class="max-w-2xl mx-auto w-full px-4 py-5 flex-1">
+
+    <!-- ================= 住戶前台 ================= -->
+    <div v-if="!isAdmin">
+      <div class="flex border-b border-slate-300 mb-5 bg-white rounded-t-xl overflow-hidden shadow-sm">
+        <button 
+          @click="residentTab = 'submit'" 
+          :class="residentTab === 'submit' ? 'border-b-2 border-emerald-600 text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'"
+          class="flex-1 py-3 text-center transition flex justify-center items-center text-sm">
+          <i class="fa-solid fa-pen-to-square mr-2"></i>我要反映
+        </button>
+        <button 
+          @click="residentTab = 'track'" 
+          :class="residentTab === 'track' ? 'border-b-2 border-emerald-600 text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'"
+          class="flex-1 py-3 text-center transition flex justify-center items-center text-sm">
+          <i class="fa-solid fa-magnifying-glass mr-2"></i>進度查詢
+        </button>
+      </div>
+
+      <!-- 表單：住戶填寫 -->
+      <div v-if="residentTab === 'submit'" class="bg-white rounded-b-xl rounded-t-none p-5 shadow-sm border border-slate-200">
+        <div class="mb-4 bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-xs text-emerald-800 flex items-center">
+          <i class="fa-solid fa-circle-info text-emerald-600 mr-2 text-base"></i>
+          <span>住戶免下載 App，送出後可隨時憑「案件編號」或「戶號」在線上查詢處理進度。</span>
+        </div>
+
+        <form @submit.prevent="submitIssue" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">棟別 / 戶號 <span class="text-red-500">*</span></label>
+              <input v-model="form.unit" required type="text" placeholder="例：A棟 8樓之1" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">聯絡手機 (選填)</label>
+              <input v-model="form.phone" type="tel" placeholder="便於管理室緊急聯繫" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">反映類別 <span class="text-red-500">*</span></label>
+            <select v-model="form.category" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+              <option value="公設修繕">公設硬體修繕 (梯廳、電梯、大門、照明)</option>
+              <option value="環境清潔">環境衛生與垃圾清潔</option>
+              <option value="違規處理">違規停車 / 樓梯間雜物堆置</option>
+              <option value="安寧秩序">噪音干擾 / 寵物相關管理</option>
+              <option value="管委會建議">管委會運作與興革意見</option>
+              <option value="其他">其他緊急通報</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">詳細說明 <span class="text-red-500">*</span></label>
+            <textarea v-model="form.description" required rows="3" placeholder="請描述發生地點、具體情況或建議改善方式..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">拍照上傳 (選填)</label>
+            <input type="file" accept="image/*" @change="handleFileUpload" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+            <div v-if="form.imagePreview" class="mt-2">
+              <img :src="form.imagePreview" alt="預覽" class="max-h-40 rounded-lg border border-slate-200">
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-md transition active:scale-98 flex justify-center items-center">
+            <i class="fa-solid fa-paper-plane mr-2"></i>送出反映案件
+          </button>
+        </form>
+      </div>
+
+      <!-- 進度查詢頁 -->
+      <div v-if="residentTab === 'track'" class="space-y-4">
+        <div class="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex space-x-2">
+          <input v-model="trackKeyword" type="text" placeholder="輸入戶號 (如 A棟) 或案件代碼" class="flex-1 border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          <button @click="trackKeyword = ''" v-if="trackKeyword" class="text-xs text-slate-400 px-1">清空</button>
+        </div>
+
+        <div v-if="filteredResidentIssues.length === 0" class="text-center py-12 text-slate-400 text-sm">
+          目前尚無符合的反映紀錄
+        </div>
+
+        <div v-for="issue in filteredResidentIssues" :key="issue.id" class="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mr-1.5">{{ issue.id }}</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">{{ issue.category }}</span>
+              <h3 class="font-bold text-sm mt-1 text-slate-800">{{ issue.unit }}</h3>
+            </div>
+            <span :class="getStatusBadgeClass(issue.status)" class="text-xs font-bold px-2.5 py-0.5 rounded-full">
+              {{ issue.status }}
+            </span>
+          </div>
+
+          <p class="text-xs text-slate-600 mb-2 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
+          
+          <div v-if="issue.image" class="mb-2">
+            <img :src="issue.image" class="max-h-36 rounded border border-slate-200">
+          </div>
+
+          <div class="text-[11px] text-slate-400 mb-2">通報時間：{{ issue.createdAt }}</div>
+
+          <!-- 管理處回覆展示區 -->
+          <div class="border-t border-slate-200 pt-2.5">
+            <div class="text-xs font-bold text-slate-700 flex items-center mb-1">
+              <i class="fa-solid fa-clipboard-check text-emerald-600 mr-1.5"></i>管委會／物業管理處置進度：
+            </div>
+            <div v-if="issue.finalReply || issue.replyImage" class="text-xs bg-emerald-50/70 border border-emerald-100 text-slate-700 p-2.5 rounded-lg space-y-2">
+              <div v-if="issue.finalReply">{{ issue.finalReply }}</div>
+              <!-- 住戶端顯示處理後照片 -->
+              <div v-if="issue.replyImage" class="mt-2">
+                <span class="text-[11px] font-bold text-emerald-800 block mb-1">
+                  <i class="fa-solid fa-camera mr-1"></i>處置/完工照片佐證：
+                </span>
+                <img :src="issue.replyImage" class="max-h-48 rounded border border-emerald-200">
+              </div>
+              <div class="text-[10px] text-emerald-700 font-medium">回覆時間：{{ issue.repliedAt }}</div>
+            </div>
+            <div v-else class="text-xs text-amber-600 italic py-1">
+              案件已收錄，刻正派工現勘與排程處置中...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ================= 管委會管理後台 ================= -->
+    <div v-if="isAdmin" class="space-y-5">
+      <!-- 狀態儀表板 -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="bg-white p-2.5 rounded-lg border-l-4 border-amber-500 shadow-sm">
+          <div class="text-[11px] text-slate-500">待分派 / 處理中</div>
+          <div class="text-lg font-bold text-amber-600">{{ countStatus('處理中') + countStatus('待分派') }}</div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border-l-4 border-blue-500 shadow-sm">
+          <div class="text-[11px] text-slate-500">管委會研議</div>
+          <div class="text-lg font-bold text-blue-600">{{ countStatus('管委會研議') }}</div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border-l-4 border-emerald-500 shadow-sm">
+          <div class="text-[11px] text-slate-500">已結案</div>
+          <div class="text-lg font-bold text-emerald-600">{{ countStatus('已結案') }}</div>
+        </div>
+        <div class="bg-white p-2.5 rounded-lg border-l-4 border-slate-400 shadow-sm">
+          <div class="text-[11px] text-slate-500">總累計件數</div>
+          <div class="text-lg font-bold text-slate-700">{{ issues.length }}</div>
+        </div>
+      </div>
+
+      <!-- 產生現場張貼 QR Code -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center">
+          <i class="fa-solid fa-qrcode text-emerald-600 mr-2"></i>住戶掃碼海報 QR Code 產生器
+        </h3>
+        <p class="text-xs text-slate-500 mb-3">印出下方二維碼張貼於社區公告欄、電梯公佈欄或管理室：</p>
+        <div class="flex items-center space-x-4">
+          <div id="qrcode" class="p-2 border border-slate-200 rounded-lg bg-white"></div>
+          <div class="text-xs space-y-1">
+            <div class="text-slate-600">掃描連結：</div>
+            <div class="font-mono text-slate-500 break-all select-all">{{ currentUrl }}</div>
+            <button @click="printPoster" class="mt-2 bg-slate-800 text-white px-3 py-1.5 rounded text-xs hover:bg-slate-700">
+              <i class="fa-solid fa-print mr-1"></i>列印張貼公告
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 案件列表與協同處置 -->
+      <div class="space-y-4">
+        <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center text-xs">
+            <span class="font-mono text-slate-500">{{ issue.id }} | {{ issue.createdAt }}</span>
+            <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
+          </div>
+
+          <div class="p-4 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-slate-800">{{ issue.unit }}</span>
+                <span class="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ issue.category }}</span>
+              </div>
+              <div class="text-xs text-slate-500">電話：{{ issue.phone || '未填' }}</div>
+            </div>
+            
+            <p class="text-xs text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
+
+            <div v-if="issue.image">
+              <img :src="issue.image" class="max-h-36 rounded border border-slate-200">
+            </div>
+
+            <!-- 內部協處流轉 -->
+            <div class="bg-amber-50/60 border border-amber-200/80 rounded-lg p-3 text-xs space-y-2">
+              <div class="font-semibold text-amber-900 flex items-center justify-between">
+                <span><i class="fa-solid fa-arrows-split-up-and-left mr-1"></i>內部處理紀錄 (住戶不可見)</span>
+                <span class="text-[11px] text-amber-700">承辦：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
+              </div>
+
+              <div class="flex flex-wrap gap-2 items-center">
+                <span class="text-slate-600">分派單位：</span>
+                <select @change="assignIssue(issue, $event.target.value)" class="border border-slate-300 rounded px-2 py-1 text-xs bg-white">
+                  <option disabled selected value="">選擇分派對象</option>
+                  <option value="總幹事/主任">總幹事/主任</option>
+                  <option value="機電維修廠商">機電維修廠商</option>
+                  <option value="工務委員">工務委員</option>
+                  <option value="環保清潔組">環保清潔組</option>
+                  <option value="管委會例會提案">管委會例會提案</option>
+                </select>
+              </div>
+
+              <div v-if="issue.internalNotes.length > 0" class="space-y-1 border-t border-amber-200/60 pt-1.5">
+                <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700">
+                  • <strong>[{{ note.role }}]</strong> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span>
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <input v-model="issue.tempNote" placeholder="輸入內部現勘/廠商回覆意見..." class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs outline-none">
+                <button @click="addInternalNote(issue)" class="bg-amber-600 text-white px-2.5 py-1 rounded text-xs hover:bg-amber-700">紀錄</button>
+              </div>
+            </div>
+
+            <!-- 主任統整公開回覆（加入照片上傳） -->
+            <div class="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3 text-xs space-y-3">
+              <div class="font-bold text-emerald-900 flex items-center">
+                <i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>發布處理說明 (住戶前台可見)
+              </div>
+              
+              <textarea v-model="issue.tempFinalReply" rows="2" placeholder="輸入處置結果與回覆住戶的說明..." class="w-full border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"></textarea>
+
+              <!-- 上傳完工/處置佐證照片 -->
+              <div>
+                <label class="block text-slate-700 font-medium mb-1">
+                  <i class="fa-solid fa-camera text-emerald-600 mr-1"></i>上傳處置／完工佐證相片 (選填)：
+                </label>
+                <input type="file" accept="image/*" @change="handleAdminFileUpload($event, issue)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200">
+                
+                <!-- 預覽目前已選或已存照片 -->
+                <div v-if="issue.tempReplyImage || issue.replyImage" class="mt-2 flex items-center space-x-2">
+                  <img :src="issue.tempReplyImage || issue.replyImage" class="max-h-24 rounded border border-emerald-300">
+                  <button @click="removeAdminImage(issue)" class="text-[11px] text-red-500 hover:underline">移除相片</button>
+                </div>
+              </div>
+
+              <div class="flex justify-end gap-2 pt-1 border-t border-emerald-200">
+                <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1 rounded text-xs">
+                  更新進度 (維持處理中)
+                </button>
+                <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 rounded text-xs shadow-sm">
+                  正式結案並發布
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= 頁尾 ================= -->
+  <footer class="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
+    <div class="flex justify-center items-center space-x-2">
+      <span>最上境社區管理委員會 &copy; 2026</span>
+      <span>•</span>
+      <button @click="promptAdminLogin" class="text-slate-400 hover:text-slate-600 underline">
+        {{ isAdmin ? '管理後台已啟用' : '管委會/管理室入口' }}
+      </button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  const STORAGE_KEY = 'zuishangjing_issues_v3';
+  const ADMIN_PASS = 'admin888';
+
+  const defaultIssues = [
+    {
+      id: 'CASE-202610-001',
+      unit: 'B棟 8樓之1',
+      phone: '0912-345-678',
+      category: '公設修繕',
+      description: '地下二樓停車場 B2-15 號車位上方排水管道疑似有滲水微滴情形，請派工勘驗。',
+      image: null,
+      createdAt: '2026-10-22 09:30',
+      status: '已結案',
+      assignedTo: '機電維修廠商',
+      internalNotes: [
+        { role: '機電廠商', comment: '已施作保溫棉及封膠固定完畢。', time: '10/22 15:30' }
+      ],
+      tempNote: '',
+      finalReply: '已由機電廠商更換保溫材與封膠修復，目前無滴水現象。',
+      replyImage: null,
+      tempReplyImage: null,
+      repliedAt: '2026-10-23 10:15',
+      tempFinalReply: ''
+    }
+  ];
+
+  Vue.createApp({
+    data() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return {
+        isAdmin: false,
+        residentTab: 'submit',
+        trackKeyword: '',
+        adminSearch: '',
+        adminFilterCategory: '',
+        currentUrl: window.location.href.split('?')[0],
+        form: {
+          unit: '',
+          phone: '',
+          category: '公設修繕',
+          description: '',
+          imagePreview: null
+        },
+        issues: stored ? JSON.parse(stored) : defaultIssues
+      }
+    },
+    watch: {
+      issues: {
+        deep: true,
+        handler(val) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(val));
+        }
+      }
+    },
+    computed: {
+      filteredResidentIssues() {
+        if (!this.trackKeyword.trim()) return this.issues;
+        const kw = this.trackKeyword.trim().toLowerCase();
+        return this.issues.filter(i => 
+          i.unit.toLowerCase().includes(kw) || 
+          i.id.toLowerCase().includes(kw)
+        );
+      },
+      filteredAdminIssues() {
+        return this.issues.filter(i => {
+          const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
+          const matchSearch = !this.adminSearch.trim() || 
+            i.unit.includes(this.adminSearch) || 
+            i.description.includes(this.adminSearch) || 
+            i.id.includes(this.adminSearch);
+          return matchCat && matchSearch;
+        });
+      }
+    },
+    mounted() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const caseParam = urlParams.get('case');
+      const catParam = urlParams.get('cat');
+      
+      if (caseParam) {
+        this.residentTab = 'track';
+        this.trackKeyword = caseParam;
+      }
+      if (catParam) {
+        this.form.category = catParam;
+      }
+    },
+    methods: {
+      promptAdminLogin() {
+        if (this.isAdmin) {
+          this.isAdmin = false;
+          return;
+        }
+        const pwd = prompt('請輸入管委會管理密碼：');
+        if (pwd === ADMIN_PASS) {
+          this.isAdmin = true;
+          this.$nextTick(() => {
+            this.generateQrCode();
+          });
+        } else if (pwd !== null) {
+          alert('密碼錯誤！');
+        }
+      },
+      logoutAdmin() {
+        this.isAdmin = false;
+      },
+      generateQrCode() {
+        const qrEl = document.getElementById('qrcode');
+        if (!qrEl) return;
+        qrEl.innerHTML = '';
+        new QRCode(qrEl, {
+          text: this.currentUrl,
+          width: 110,
+          height: 110,
+          colorDark: "#065f46",
+          colorLight: "#ffffff"
+        });
+      },
+      printPoster() {
+        window.print();
+      },
+      // 通用壓縮上傳工具
+      compressImage(file, callback) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
+            canvas.height = (img.width > MAX_WIDTH) ? (img.height * scaleSize) : img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            callback(canvas.toDataURL('image/jpeg', 0.7));
+          };
+        };
+        reader.readAsDataURL(file);
+      },
+      handleFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.compressImage(file, (base64) => {
+          this.form.imagePreview = base64;
+        });
+      },
+      handleAdminFileUpload(e, issue) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.compressImage(file, (base64) => {
+          issue.tempReplyImage = base64;
+        });
+      },
+      removeAdminImage(issue) {
+        issue.tempReplyImage = null;
+        issue.replyImage = null;
+      },
+      submitIssue() {
+        const date = new Date();
+        const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
+        const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+        
+        const newIssue = {
+          id: caseId,
+          unit: this.form.unit,
+          phone: this.form.phone,
+          category: this.form.category,
+          description: this.form.description,
+          image: this.form.imagePreview,
+          createdAt: timeStr,
+          status: '待分派',
+          assignedTo: '總幹事/主任',
+          internalNotes: [],
+          tempNote: '',
+          finalReply: '',
+          replyImage: null,
+          tempReplyImage: null,
+          repliedAt: '',
+          tempFinalReply: ''
+        };
+
+        this.issues.unshift(newIssue);
+        alert(`反映案件已送出！\n\n案件編號：${caseId}\n畫面即將切換至進度頁面，您可將此畫面截圖或加入書籤以追蹤處理情況。`);
+        
+        this.form.unit = '';
+        this.form.phone = '';
+        this.form.description = '';
+        this.form.imagePreview = null;
+        this.residentTab = 'track';
+        this.trackKeyword = caseId;
+      },
+      assignIssue(issue, role) {
+        issue.assignedTo = role;
+        issue.status = role.includes('例會') || role.includes('委員') ? '管委會研議' : '處理中';
+      },
+      addInternalNote(issue) {
+        if (!issue.tempNote.trim()) return;
+        const now = new Date();
+        const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        issue.internalNotes.push({
+          role: issue.assignedTo || '管委會',
+          comment: issue.tempNote.trim(),
+          time: timeStr
+        });
+        issue.tempNote = '';
+      },
+      publishToResident(issue, status) {
+        if (!issue.tempFinalReply.trim() && !issue.finalReply && !issue.tempReplyImage) {
+          alert('請輸入回覆說明或上傳處置照片！');
+          return;
+        }
+        if (issue.tempFinalReply.trim()) {
+          issue.finalReply = issue.tempFinalReply.trim();
+        }
+        if (issue.tempReplyImage) {
+          issue.replyImage = issue.tempReplyImage;
+        }
+        issue.status = status;
+        const now = new Date();
+        issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        alert(`已成功更新進度為【${status}】並發布說明與照片！`);
+      },
+      countStatus(st) {
+        return this.issues.filter(i => i.status === st).length;
+      },
+      getStatusBadgeClass(status) {
+        switch (status) {
+          case '待分派': return 'bg-amber-100 text-amber-800';
+          case '處理中': return 'bg-blue-100 text-blue-800';
+          case '管委會研議': return 'bg-purple-100 text-purple-800';
+          case '已結案': return 'bg-emerald-100 text-emerald-800';
+          default: return 'bg-slate-100 text-slate-700';
+        }
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">

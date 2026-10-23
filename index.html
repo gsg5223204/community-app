@@ -31,7 +31,7 @@
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <button @click="fetchIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
+        <button @click="fetchIssues(true)" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
         <button @click="toggleViewMode" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
@@ -45,8 +45,9 @@
   <!-- ================= 主內容區 ================= -->
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
 
-    <div v-if="loading" class="mb-4 text-center text-xs text-slate-500 bg-white py-2 rounded shadow-sm border border-slate-200">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在與雲端試算表連線中...
+    <!-- 僅在管理後台或主動手動點擊整理時才顯示連線小提示 -->
+    <div v-if="loading && isAdmin" class="mb-4 text-center text-xs text-slate-500 bg-white py-2 rounded shadow-sm border border-slate-200">
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步試算表最新紀錄...
     </div>
 
     <!-- ================= 住戶前台 ================= -->
@@ -82,4 +83,128 @@
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">反映類別 *</label>
+            <select v-model="form.category" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+              <option value="公設修繕">公設硬體修繕 (梯廳、電梯、大門)</option>
+              <option value="環境清潔">環境衛生與清潔</option>
+              <option value="違規處理">違規處理 (違停 / 雜物堆放)</option>
+              <option value="安寧秩序">安寧秩序 (噪音干擾 / 寵物相關)</option>
+              <option value="管委會建議">管委會建議 (運作與興革意見)</option>
+              <option value="其他">其他反映事項</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">詳細說明 *</label>
+            <textarea v-model="form.description" required rows="4" placeholder="請描述發生地點、具體狀況或改善建議..." class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+          </div>
+
+          <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
+            <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
+            {{ submitting ? '正在寫入雲端試算表...' : '送出反映案件' }}
+          </button>
+        </form>
+      </div>
+
+      <!-- 進度查詢頁 -->
+      <div v-if="residentTab === 'track'" class="space-y-4">
+        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex space-x-2">
+          <input v-model="trackKeyword" type="text" placeholder="輸入戶號 (如 A棟) 或案件代碼" class="flex-1 border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          <button @click="trackKeyword = ''" v-if="trackKeyword" class="text-xs text-slate-400 px-2">清空</button>
+        </div>
+
+        <div v-if="filteredResidentIssues.length === 0" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-400 text-sm">
+          目前查無相關反映案件紀錄
+        </div>
+
+        <div v-for="issue in filteredResidentIssues" :key="issue.id" class="bg-white rounded-lg p-5 shadow-sm border border-slate-200">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mr-2">{{ issue.id }}</span>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">{{ issue.category }}</span>
+              <h3 class="font-bold text-base mt-1 text-slate-800">{{ issue.unit }}</h3>
+            </div>
+            <span :class="getStatusBadgeClass(issue.status)" class="text-xs font-bold px-2.5 py-1 rounded-full">
+              {{ issue.status }}
+            </span>
+          </div>
+
+          <p class="text-sm text-slate-600 mb-3 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
+          <div class="text-xs text-slate-400 mb-3">反映時間：{{ issue.createdAt }}</div>
+
+          <div class="border-t border-slate-200 pt-3">
+            <h4 class="text-xs font-bold text-slate-700 flex items-center mb-1">
+              <i class="fa-solid fa-clipboard-check text-emerald-600 mr-1.5"></i>管理室／管委會處置回覆：
+            </h4>
+            <div v-if="issue.finalReply" class="text-sm bg-emerald-50/70 border border-emerald-100 text-slate-700 p-3 rounded">
+              {{ issue.finalReply }}
+              <div class="text-[11px] text-emerald-700 mt-1 font-medium">回覆時間：{{ issue.repliedAt }} (統整發布：主任)</div>
+            </div>
+            <div v-else class="text-xs text-amber-600 italic py-1">
+              案件已收案，刻正由管委會與物業單位現勘研議中...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 管理後台 ================= -->
+    <div v-if="isAdmin" class="space-y-6">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white p-3 rounded border-l-4 border-amber-500 shadow-sm">
+          <div class="text-xs text-slate-500">待分派 / 處理中</div>
+          <div class="text-xl font-bold text-amber-600">{{ countStatus('處理中') + countStatus('待分派') }}</div>
+        </div>
+        <div class="bg-white p-3 rounded border-l-4 border-blue-500 shadow-sm">
+          <div class="text-xs text-slate-500">管委會審議中</div>
+          <div class="text-xl font-bold text-blue-600">{{ countStatus('管委會研議') }}</div>
+        </div>
+        <div class="bg-white p-3 rounded border-l-4 border-emerald-500 shadow-sm">
+          <div class="text-xs text-slate-500">已結案覆核</div>
+          <div class="text-xl font-bold text-emerald-600">{{ countStatus('已結案') }}</div>
+        </div>
+        <div class="bg-white p-3 rounded border-l-4 border-slate-400 shadow-sm">
+          <div class="text-xs text-slate-500">總累計案件</div>
+          <div class="text-xl font-bold text-slate-700">{{ issues.length }}</div>
+        </div>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap gap-2 items-center">
+        <input v-model="adminSearch" type="text" placeholder="關鍵字 / 戶號 / 內容搜尋" class="border border-slate-300 rounded px-3 py-1.5 text-sm flex-1 outline-none">
+        <select v-model="adminFilterCategory" class="border border-slate-300 rounded px-3 py-1.5 text-sm outline-none bg-white">
+          <option value="">全部類別</option>
+          <option value="公設修繕">公設修繕</option>
+          <option value="環境清潔">環境清潔</option>
+          <option value="違規處理">違規處理</option>
+          <option value="安寧秩序">安寧秩序</option>
+          <option value="管委會建議">管委會建議</option>
+        </select>
+      </div>
+
+      <div class="space-y-4">
+        <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+          <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center text-xs">
+            <span class="font-mono text-slate-500">{{ issue.id }} | {{ issue.createdAt }}</span>
+            <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
+          </div>
+
+          <div class="p-4 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-bold text-base text-slate-800">{{ issue.unit }}</span>
+                <span class="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ issue.category }}</span>
+              </div>
+              <div class="text-xs text-slate-500">電話：{{ issue.phone || '未留' }}</div>
+            </div>
+            
+            <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
+
+            <div class="bg-amber-50/60 border border-amber-200/80 rounded p-3 text-xs space-y-2">
+              <div class="font-semibold text-amber-900 flex items-center justify-between">
+                <span><i class="fa-solid fa-arrows-split-up-and-left mr-1"></i>內部協處流程</span>
+                <span class="text-[11px] text-amber-700">目前分派至：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
+              </div>
+
+              <div class="flex flex-wrap gap-2 items-center pt-1">
+                <span class="text-slate-600">更換指派：</span>
+                <select @change="assignIssue(issue,

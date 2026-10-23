@@ -94,11 +94,23 @@
             <textarea v-model="form.description" required rows="3" placeholder="請描述發生地點、具體情況或建議改善方式..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
           </div>
 
+          <!-- 前台上傳：支援相片與影片 -->
           <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">拍照上傳 (選填)</label>
-            <input type="file" accept="image/*" @change="handleFileUpload" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-            <div v-if="form.imagePreview" class="mt-2">
-              <img :src="form.imagePreview" alt="預覽" class="max-h-40 rounded-lg border border-slate-200">
+            <label class="block text-xs font-bold text-slate-700 mb-1">上傳佐證相片／短影片 (選填)</label>
+            <input type="file" accept="image/*,video/*" @change="handleFileUpload" class="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+            <p class="text-[10px] text-slate-400 mt-0.5">可直接拍照、手機錄影或從相簿上傳（影片建議 15MB 內）。</p>
+            
+            <!-- 預覽上傳內容 -->
+            <div v-if="form.mediaPreview" class="mt-2.5">
+              <template v-if="form.mediaType === 'image'">
+                <img :src="form.mediaPreview" alt="預覽相片" class="max-h-48 rounded-lg border border-slate-200">
+              </template>
+              <template v-else-if="form.mediaType === 'video'">
+                <video :src="form.mediaPreview" controls class="max-h-48 w-full rounded-lg border border-slate-200 bg-black"></video>
+              </template>
+              <button type="button" @click="removeResidentMedia" class="text-xs text-red-500 hover:underline mt-1 block">
+                <i class="fa-solid fa-trash mr-1"></i>移除已選檔案
+              </button>
             </div>
           </div>
 
@@ -133,8 +145,14 @@
 
           <p class="text-xs text-slate-600 mb-2 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
           
-          <div v-if="issue.image" class="mb-2">
-            <img :src="issue.image" class="max-h-36 rounded border border-slate-200">
+          <!-- 住戶反映上傳的媒體 (相片/影片) -->
+          <div v-if="issue.media" class="mb-2">
+            <template v-if="issue.media.type === 'image'">
+              <img :src="issue.media.data" class="max-h-40 rounded border border-slate-200">
+            </template>
+            <template v-else-if="issue.media.type === 'video'">
+              <video :src="issue.media.data" controls class="max-h-44 w-full rounded border border-slate-200 bg-black"></video>
+            </template>
           </div>
 
           <div class="text-[11px] text-slate-400 mb-2">通報時間：{{ issue.createdAt }}</div>
@@ -145,56 +163,4 @@
               <i class="fa-solid fa-clipboard-check text-emerald-600 mr-1.5"></i>管委會／物業管理處置進度：
             </div>
             <div v-if="issue.finalReply || issue.replyAttachment" class="text-xs bg-emerald-50/70 border border-emerald-100 text-slate-700 p-2.5 rounded-lg space-y-2">
-              <div v-if="issue.finalReply">{{ issue.finalReply }}</div>
-              
-              <!-- 住戶端顯示處理後附件（照片/影片/文件） -->
-              <div v-if="issue.replyAttachment" class="mt-2 pt-2 border-t border-emerald-200/60">
-                <span class="text-[11px] font-bold text-emerald-800 block mb-1">
-                  <i class="fa-solid fa-paperclip mr-1"></i>處置佐證附件：
-                </span>
-                
-                <!-- 圖片附件 -->
-                <div v-if="issue.replyAttachment.type === 'image'">
-                  <img :src="issue.replyAttachment.data" class="max-h-48 rounded border border-emerald-200 shadow-sm">
-                </div>
-                
-                <!-- 影片附件 -->
-                <div v-else-if="issue.replyAttachment.type === 'video'">
-                  <video :src="issue.replyAttachment.data" controls class="max-h-48 w-full rounded border border-emerald-200 bg-black"></video>
-                </div>
-                
-                <!-- 一般檔案附件 (PDF, Word, Excel 等) -->
-                <div v-else class="flex items-center space-x-2 bg-white p-2 rounded border border-emerald-200">
-                  <i class="fa-solid fa-file-lines text-emerald-600 text-base"></i>
-                  <span class="flex-1 truncate font-medium text-slate-700">{{ issue.replyAttachment.name }}</span>
-                  <a :href="issue.replyAttachment.data" :download="issue.replyAttachment.name" class="bg-emerald-600 text-white px-2.5 py-1 rounded text-[11px] font-bold hover:bg-emerald-700">
-                    <i class="fa-solid fa-download mr-1"></i>下載檢視
-                  </a>
-                </div>
-              </div>
-
-              <div class="text-[10px] text-emerald-700 font-medium">回覆時間：{{ issue.repliedAt }}</div>
-            </div>
-            <div v-else class="text-xs text-amber-600 italic py-1">
-              案件已收錄，刻正由管委會與物業單位研議排程中...
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-    <!-- ================= 管委會管理後台 ================= -->
-    <div v-if="isAdmin" class="space-y-5">
-      <!-- 狀態儀表板 -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div class="bg-white p-2.5 rounded-lg border-l-4 border-amber-500 shadow-sm">
-          <div class="text-[11px] text-slate-500">待分派 / 處理中</div>
-          <div class="text-lg font-bold text-amber-600">{{ countStatus('處理中') + countStatus('待分派') }}</div>
-        </div>
-        <div class="bg-white p-2.5 rounded-lg border-l-4 border-blue-500 shadow-sm">
-          <div class="text-[11px] text-slate-500">管委會研議</div>
-          <div class="text-lg font-bold text-blue-600">{{ countStatus('管委會研議') }}</div>
-        </div>
-        <div class="bg-white p-2.5 rounded-lg border-l-4 border-emerald-500 shadow-sm">
-          <div class="text-[11px] text-slate-500
+              <div v

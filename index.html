@@ -30,19 +30,27 @@
           <p class="text-xs text-emerald-200">免安裝住戶反映與管理系統</p>
         </div>
       </div>
-      <button @click="toggleViewMode" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
-        <i :class="isAdmin ? 'fa-solid fa-user' : 'fa-solid fa-user-shield'" class="mr-1"></i>
-        切換為{{ isAdmin ? '住戶前台' : '管理後台' }}
-      </button>
+      <div class="flex items-center space-x-2">
+        <button @click="fetchIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
+          <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
+        </button>
+        <button @click="toggleViewMode" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
+          <i :class="isAdmin ? 'fa-solid fa-user' : 'fa-solid fa-user-shield'" class="mr-1"></i>
+          切換為{{ isAdmin ? '住戶前台' : '管理後台' }}
+        </button>
+      </div>
     </div>
   </header>
 
   <!-- ================= 主內容區 ================= -->
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
 
+    <div v-if="loading" class="mb-4 text-center text-xs text-slate-500 bg-white py-2 rounded shadow-sm border border-slate-200">
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在與雲端試算表連線中...
+    </div>
+
     <!-- ================= 住戶前台 ================= -->
     <div v-if="!isAdmin">
-      <!-- 標籤導覽 (我要反映 / 進度查詢) -->
       <div class="flex border-b border-slate-300 mb-6 bg-white rounded-t-lg overflow-hidden shadow-sm">
         <button 
           @click="residentTab = 'submit'" 
@@ -90,14 +98,9 @@
             <textarea v-model="form.description" required rows="4" placeholder="請描述發生地點、具體狀況或改善建議..." class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">上傳佐證相片 / 影片</label>
-            <input type="file" accept="image/*,video/*" @change="handleFileUpload" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-            <p class="text-xs text-slate-400 mt-1">支援相機直接拍照、錄影或檔案上傳</p>
-          </div>
-
-          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
-            <i class="fa-solid fa-paper-plane mr-2"></i>送出反映案件
+          <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
+            <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
+            {{ submitting ? '正在寫入雲端試算表...' : '送出反映案件' }}
           </button>
         </form>
       </div>
@@ -106,14 +109,13 @@
       <div v-if="residentTab === 'track'" class="space-y-4">
         <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex space-x-2">
           <input v-model="trackKeyword" type="text" placeholder="輸入戶號 (如 A棟) 或案件代碼" class="flex-1 border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
-          <button @click="filterTrack" class="bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800">搜尋</button>
+          <button @click="trackKeyword = ''" v-if="trackKeyword" class="text-xs text-slate-400 px-2">清空</button>
         </div>
 
-        <div v-if="filteredResidentIssues.length === 0" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-400 text-sm">
+        <div v-if="filteredResidentIssues.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-400 text-sm">
           目前查無相關反映案件紀錄
         </div>
 
-        <!-- 案件列表 -->
         <div v-for="issue in filteredResidentIssues" :key="issue.id" class="bg-white rounded-lg p-5 shadow-sm border border-slate-200">
           <div class="flex justify-between items-start mb-2">
             <div>
@@ -224,7 +226,7 @@
               </div>
 
               <div class="flex gap-2 pt-1">
-                <input v-model="issue.tempNote" placeholder="委員/廠商內部回饋意見..." class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs outline-none">
+                <input v-model="issue.tempNote" placeholder="委員內部回饋意見..." class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs outline-none">
                 <button @click="addInternalNote(issue)" class="bg-amber-600 text-white px-2.5 py-1 rounded text-xs hover:bg-amber-700">記下</button>
               </div>
             </div>
@@ -250,7 +252,6 @@
 
   </main>
 
-  <!-- ================= 頁尾 ================= -->
   <footer class="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
     <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
@@ -258,6 +259,9 @@
 </div>
 
 <script>
+  // 👇 請把你在瀏覽器顯示 [] 的那串完整網址貼在下方引號中：
+  const GOOGLE_SCRIPT_URL = '貼上你的/exec網址';
+
   const { createApp } = Vue;
 
   createApp({
@@ -268,49 +272,15 @@
         trackKeyword: '',
         adminSearch: '',
         adminFilterCategory: '',
+        loading: false,
+        submitting: false,
         form: {
           unit: '',
           phone: '',
           category: '公設修繕',
-          description: '',
-          file: null
+          description: ''
         },
-        issues: [
-          {
-            id: 'CASE-202610-001',
-            unit: 'B棟 8樓之1',
-            phone: '0912-345-678',
-            category: '公設修繕',
-            description: '地下二樓停車場 B2-15 號車位上方排水管道疑似有滲水微滴情形，請派工勘驗。',
-            createdAt: '2026-10-22 09:30',
-            status: '已結案',
-            assignedTo: '設備委員意見',
-            internalNotes: [
-              { role: '設備委員意見', comment: '已會同廠商至現場檢視，為冷氣排水管保溫棉受潮微漏，已重新施作完畢。', time: '10/22 15:30' }
-            ],
-            tempNote: '',
-            finalReply: '感謝住戶通報！經廠商會同現場查驗，係冷排管保溫層受潮產生冷凝水滴落，已完成封膠與保溫材更換，目前功能正常無漏水。',
-            repliedAt: '2026-10-23 10:15',
-            tempFinalReply: ''
-          },
-          {
-            id: 'CASE-202610-002',
-            unit: 'A棟 15樓之2',
-            phone: '0988-111-222',
-            category: '安寧秩序',
-            description: '深夜 23:30 過後頂樓或樓上時常有規律重物碰撞聲響，已影響睡眠。',
-            createdAt: '2026-10-23 08:10',
-            status: '管委會研議',
-            assignedTo: '安全委員意見',
-            internalNotes: [
-              { role: '總幹事/主任', comment: '已會同保全巡視頂樓加壓馬達，機械震動正常。安排排程夜巡。', time: '10/23 09:40' }
-            ],
-            tempNote: '',
-            finalReply: '',
-            repliedAt: '',
-            tempFinalReply: ''
-          }
-        ]
+        issues: []
       };
     },
     computed: {
@@ -333,17 +303,39 @@
         });
       }
     },
+    mounted() {
+      this.fetchIssues();
+    },
     methods: {
       toggleViewMode() {
         this.isAdmin = !this.isAdmin;
+        if (this.isAdmin) {
+          this.fetchIssues();
+        }
       },
-      handleFileUpload(e) {
-        this.form.file = e.target.files[0] || null;
+      async fetchIssues() {
+        if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('貼上你的')) return;
+        this.loading = true;
+        try {
+          const res = await fetch(GOOGLE_SCRIPT_URL);
+          const data = await res.json();
+          this.issues = data.map(item => ({
+            ...item,
+            tempNote: '',
+            tempFinalReply: ''
+          }));
+        } catch (err) {
+          console.error('抓取試算表失敗', err);
+        } finally {
+          this.loading = false;
+        }
       },
-      filterTrack() {
-        // 觸發 computed 計算
-      },
-      submitIssue() {
+      async submitIssue() {
+        if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('貼上你的')) {
+          alert('請先填妥 Google Apps Script 網址！');
+          return;
+        }
+
         const date = new Date();
         const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
         const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
@@ -354,28 +346,53 @@
           phone: this.form.phone,
           category: this.form.category,
           description: this.form.description,
+          file: '',
           createdAt: timeStr,
           status: '待分派',
           assignedTo: '總幹事/主任',
           internalNotes: [],
-          tempNote: '',
           finalReply: '',
-          repliedAt: '',
-          tempFinalReply: ''
+          repliedAt: ''
         };
 
-        this.issues.unshift(newIssue);
-        alert(`反映單已成功送出！\n\n您的案件編號為：${caseId}\n已自動為您切換至「進度查詢」查看處理狀態。`);
-        
-        this.form.unit = '';
-        this.form.phone = '';
-        this.form.description = '';
-        this.residentTab = 'track';
-        this.trackKeyword = caseId;
+        this.submitting = true;
+        try {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'create', data: newIssue })
+          });
+
+          this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '' });
+          alert(`反映單已成功寫入雲端！\n\n案件編號：${caseId}\n管理室與管委會已同步收到。`);
+          
+          this.form.unit = '';
+          this.form.phone = '';
+          this.form.description = '';
+          this.residentTab = 'track';
+          this.trackKeyword = caseId;
+        } catch (err) {
+          alert('連線失敗，請檢查網路！');
+        } finally {
+          this.submitting = false;
+        }
+      },
+      async syncUpdate(issue) {
+        if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes('貼上你的')) return;
+        try {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'update', data: issue })
+          });
+        } catch (err) {
+          console.error('更新試算表失敗', err);
+        }
       },
       assignIssue(issue, role) {
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
+        this.syncUpdate(issue);
       },
       addInternalNote(issue) {
         if (!issue.tempNote.trim()) return;
@@ -388,6 +405,7 @@
           time: timeStr
         });
         issue.tempNote = '';
+        this.syncUpdate(issue);
       },
       publishToResident(issue, status) {
         if (!issue.tempFinalReply.trim() && !issue.finalReply) {
@@ -400,7 +418,8 @@
         issue.status = status;
         const now = new Date();
         issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-        alert(`已成功發布回覆並更新案件為【${status}】！住戶端已可查閱。`);
+        this.syncUpdate(issue);
+        alert(`已成功發布並同步至試算表！狀態已變更為【${status}】。`);
       },
       countStatus(st) {
         return this.issues.filter(i => i.status === st).length;

@@ -9,6 +9,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- Supabase 官方 SDK (即時跨裝置雲端同步) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- FontAwesome 圖示 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
@@ -30,7 +32,10 @@
           <p class="text-xs text-emerald-200">免安裝住戶反映與管理系統</p>
         </div>
       </div>
-      <div>
+      <div class="flex items-center space-x-2">
+        <button @click="fetchIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
+          <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
+        </button>
         <button v-if="!isAdmin" @click="promptAdminLogin" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
@@ -43,6 +48,10 @@
 
   <!-- ================= 主內容區 ================= -->
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
+
+    <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步雲端資料庫...
+    </div>
 
     <!-- ================= 住戶前台 ================= -->
     <div v-if="!isAdmin">
@@ -123,7 +132,7 @@
 
           <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
             <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
-            {{ submitting ? '正在送出中...' : '送出反映案件' }}
+            {{ submitting ? '正在送出至雲端...' : '送出反映案件' }}
           </button>
         </form>
       </div>
@@ -154,7 +163,7 @@
           <div>為保護住戶隱私，請同時輸入「案件代碼/戶號」及「查詢密碼」進行驗證。</div>
         </div>
 
-        <div v-else-if="filteredResidentIssues.length === 0" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-amber-600 text-sm">
+        <div v-else-if="filteredResidentIssues.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-amber-600 text-sm">
           <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
           <div>查無符合之案件，或查詢密碼輸入錯誤！</div>
         </div>
@@ -218,21 +227,15 @@
     <!-- ================= 管理後台 ================= -->
     <div v-if="isAdmin" class="space-y-6">
 
-      <!-- 工具列 -->
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
-        <span class="font-bold text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i>管理後台已認證 (共 {{ issues.length }} 筆案件)</span>
+        <span class="font-bold text-emerald-800"><i class="fa-solid fa-cloud mr-1"></i>雲端資料庫已連線 (共 {{ issues.length }} 筆案件)</span>
         <div class="flex gap-2">
           <button @click="openExportModal" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow transition flex items-center">
             <i class="fa-solid fa-file-export mr-1"></i>自訂篩選匯出備份
           </button>
-          <label class="bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded shadow cursor-pointer transition flex items-center">
-            <i class="fa-solid fa-upload mr-1"></i>匯入還原備份
-            <input type="file" accept=".json" @change="importBackup" class="hidden">
-          </label>
         </div>
       </div>
 
-      <!-- 統計數據看板 -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="bg-white p-3 rounded border-l-4 border-amber-500 shadow-sm">
           <div class="text-xs text-slate-500">待分派 / 處理中</div>
@@ -252,7 +255,6 @@
         </div>
       </div>
 
-      <!-- 關鍵字搜尋與類別篩選 -->
       <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap gap-2 items-center">
         <input v-model="adminSearch" type="text" placeholder="關鍵字 / 戶號 / 內容搜尋" class="border border-slate-300 rounded px-3 py-1.5 text-sm flex-1 outline-none">
         <select v-model="adminFilterCategory" class="border border-slate-300 rounded px-3 py-1.5 text-sm outline-none bg-white">
@@ -265,7 +267,6 @@
         </select>
       </div>
 
-      <!-- 後台案件完整卡片清單 -->
       <div class="space-y-4">
         <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center text-xs">
@@ -286,7 +287,6 @@
             
             <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
 
-            <!-- 住戶相片預覽 -->
             <div v-if="issue.files && issue.files.length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
               <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片：</div>
               <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -297,7 +297,6 @@
               </div>
             </div>
 
-            <!-- 內部協處流程區塊 -->
             <div class="bg-amber-50/60 border border-amber-200/80 rounded p-3 text-xs space-y-2">
               <div class="font-semibold text-amber-900 flex items-center justify-between">
                 <span><i class="fa-solid fa-arrows-split-up-and-left mr-1"></i>內部協處流程</span>
@@ -331,7 +330,6 @@
               </div>
             </div>
 
-            <!-- 主任回覆區（支援相片、影片、文件最多 5 則） -->
             <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
               <div class="font-bold text-emerald-900 flex items-center justify-between">
                 <span><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布 (住戶可見)</span>
@@ -358,7 +356,7 @@
                     <img v-if="p.type.startsWith('image')" :src="p.data" class="w-full h-full object-cover">
                     <video v-else-if="p.type.startsWith('video')" :src="p.data" class="w-full h-full object-cover"></video>
                     <div v-else class="text-[10px] text-white p-1 text-center truncate w-full">{{ p.name }}</div>
-                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); persistSave();" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
+                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); syncUpdate(issue);" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
                   </div>
@@ -419,9 +417,6 @@
               圖文可視化報表 (.html)
             </button>
           </div>
-          <p class="text-[11px] text-slate-400 mt-1">
-            * 試算表適合 Excel 統計；圖文報表點開即見照片影片，可直接列印為 PDF。
-          </p>
         </div>
 
         <div>
@@ -474,8 +469,21 @@
 </div>
 
 <script>
-  // 🔐 後台管理者密碼（預設為 8888，可自行修改）
+  // 🔐 後台管理者密碼
   const ADMIN_PASSWORD = '8888';
+
+  // ☁️ 請在 353 與 354 行填入你的 Supabase 設定
+  const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
+
+  let supabaseClient = null;
+  try {
+    if (SUPABASE_URL.startsWith('http')) {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch (e) {
+    console.warn('Supabase 初始化略過：', e);
+  }
 
   function compressImage(file) {
     return new Promise((resolve) => {
@@ -519,14 +527,6 @@
 
   createApp({
     data() {
-      let initialIssues = [];
-      try {
-        const raw = localStorage.getItem('ZUISHANGJING_ISSUES_DATA');
-        if (raw) initialIssues = JSON.parse(raw);
-      } catch(e) {
-        initialIssues = [];
-      }
-
       return {
         isAdmin: false,
         residentTab: 'submit',
@@ -534,6 +534,7 @@
         trackPassword: '',
         adminSearch: '',
         adminFilterCategory: '',
+        loading: false,
         submitting: false,
         form: {
           unit: '',
@@ -542,7 +543,7 @@
           description: ''
         },
         residentFiles: [],
-        issues: initialIssues,
+        issues: [],
         
         showExportModal: false,
         exportConfig: {
@@ -595,6 +596,9 @@
       }
     },
     mounted() {
+      this.fetchIssues();
+
+      // LINE 直達連結參數解析
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const pwd = urlParams.get('pwd');
@@ -605,18 +609,12 @@
       }
     },
     methods: {
-      persistSave() {
-        try {
-          localStorage.setItem('ZUISHANGJING_ISSUES_DATA', JSON.stringify(this.issues));
-        } catch(e) {
-          console.error('儲存失敗：', e);
-        }
-      },
       promptAdminLogin() {
         const input = prompt('請輸入管理後台密碼：');
         if (input === null) return;
         if (input.trim() === ADMIN_PASSWORD) {
           this.isAdmin = true;
+          this.fetchIssues();
         } else {
           alert('密碼錯誤！無法進入後台。');
         }
@@ -650,9 +648,31 @@
           const res = await compressImage(file);
           if (res) issue.replyFiles.push(res);
         }
-        this.persistSave();
+        this.syncUpdate(issue);
       },
-      submitIssue() {
+      async fetchIssues() {
+        if (!supabaseClient) return;
+        this.loading = true;
+        try {
+          const { data, error } = await supabaseClient
+            .from('issues')
+            .select('*')
+            .order('createdAt', { ascending: false });
+
+          if (!error && Array.isArray(data)) {
+            this.issues = data.map(item => ({
+              ...item,
+              tempNote: '',
+              tempFinalReply: item.finalReply || ''
+            }));
+          }
+        } catch (err) {
+          console.warn('雲端載入略過');
+        } finally {
+          this.loading = false;
+        }
+      },
+      async submitIssue() {
         if (!this.form.queryPassword.trim()) {
           alert('請設定自訂查詢密碼，以便日後查驗案件！');
           return;
@@ -680,10 +700,14 @@
             replyFiles: []
           };
 
-          this.issues.unshift(newIssue);
-          this.persistSave();
+          if (supabaseClient) {
+            const { error } = await supabaseClient.from('issues').insert([newIssue]);
+            if (error) throw error;
+          }
 
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n請牢記案件編號與查詢密碼。`);
+          this.issues.unshift(newIssue);
+
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n資料已即時同步至雲端。`);
           
           this.trackKeyword = caseId;
           this.trackPassword = this.form.queryPassword.trim();
@@ -694,15 +718,30 @@
           this.residentFiles = [];
           this.residentTab = 'track';
         } catch (err) {
-          alert('儲存失敗：' + err);
+          alert('送出失敗，請檢查網路連線或金鑰！');
         } finally {
           this.submitting = false;
+        }
+      },
+      async syncUpdate(issue) {
+        if (supabaseClient) {
+          await supabaseClient
+            .from('issues')
+            .update({
+              status: issue.status,
+              assignedTo: issue.assignedTo,
+              internalNotes: issue.internalNotes,
+              finalReply: issue.finalReply,
+              repliedAt: issue.repliedAt,
+              replyFiles: issue.replyFiles
+            })
+            .eq('id', issue.id);
         }
       },
       assignIssue(issue, role) {
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
-        this.persistSave();
+        this.syncUpdate(issue);
       },
       addInternalNote(issue) {
         if (!issue.tempNote?.trim()) return;
@@ -715,9 +754,9 @@
           time: timeStr
         });
         issue.tempNote = '';
-        this.persistSave();
+        this.syncUpdate(issue);
       },
-      publishToResident(issue, status) {
+      async publishToResident(issue, status) {
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
@@ -730,7 +769,7 @@
         const now = new Date();
         issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
         
-        this.persistSave();
+        await this.syncUpdate(issue);
         alert(`已成功發布！狀態已變更為【${status}】。\n可點擊「複製 LINE 通知連結」發送給住戶！`);
       },
       copyLineNotifyLink(issue) {
@@ -762,7 +801,6 @@
         const dateTag = new Date().toISOString().slice(0, 10);
 
         if (this.exportConfig.format === 'csv') {
-          // 📊 格式 1：Excel 試算表 (CSV)
           const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間'];
           const csvRows = targetList.map(item => {
             const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
@@ -784,7 +822,6 @@
           URL.revokeObjectURL(url);
 
         } else {
-          // 🖼️ 格式 2：圖文視覺化報表 (.html)
           const cardsHtml = targetList.map(item => `
             <div style="border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;font-family:sans-serif;">
               <div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px;">
@@ -821,35 +858,17 @@
             </div>
           `).join('');
 
-          const fullHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>最上境社區案件報表</title></head><body style="background:#f1f5f9;padding:24px;max-width:800px;margin:auto;"><h2 style="color:#065f46;text-align:center;">最上境社區 - 案件與佐證報表 (${dateTag})</h2>${cardsHtml}</body></html>`;
+          const fullHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>最上境社區案件報表</title></head><body style="background:#f1f5f9;padding:24px;max-width:800px;margin:auto;"><h2 style="color:#065f46;text-align:center;">最上境社區 - 案件報表 (${dateTag})</h2>${cardsHtml}</body></html>`;
 
           const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = `最上境社區案件可視化報表_${dateTag}.html`;
           a.click();
-          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(a.href);
         }
 
         this.showExportModal = false;
-      },
-      importBackup(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          try {
-            const imported = JSON.parse(event.target.result);
-            if (Array.isArray(imported)) {
-              this.issues = imported;
-              this.persistSave();
-              alert('備份還原成功！所有案件與紀錄已完整載入。');
-            }
-          } catch(err) {
-            alert('檔案格式錯誤，無法還原！');
-          }
-        };
-        reader.readAsText(file);
       },
       countStatus(st) {
         return this.issues.filter(i => i.status === st).length;

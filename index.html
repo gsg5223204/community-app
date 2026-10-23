@@ -9,8 +9,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <!-- Supabase 官方 SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- FontAwesome 圖示 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
@@ -33,9 +31,6 @@
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <button @click="fetchIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
-          <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
-        </button>
         <button @click="toggleViewMode" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
           <i :class="isAdmin ? 'fa-solid fa-user' : 'fa-solid fa-user-shield'" class="mr-1"></i>
           切換為{{ isAdmin ? '住戶前台' : '管理後台' }}
@@ -46,10 +41,6 @@
 
   <!-- ================= 主內容區 ================= -->
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
-
-    <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步資料...
-    </div>
 
     <!-- ================= 住戶前台 ================= -->
     <div v-if="!isAdmin">
@@ -117,11 +108,11 @@
               :disabled="residentFiles.length >= 3"
               class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50">
 
-            <div v-if="residentFilePreviews.length > 0" class="grid grid-cols-3 gap-2 mt-3">
-              <div v-for="(item, idx) in residentFilePreviews" :key="idx" class="relative group rounded border border-slate-200 overflow-hidden bg-slate-900 aspect-video flex items-center justify-center">
-                <img v-if="item.type.startsWith('image')" :src="item.url" class="w-full h-full object-cover">
-                <video v-else-if="item.type.startsWith('video')" :src="item.url" class="w-full h-full object-cover"></video>
-                <button type="button" @click="removeResidentFile(idx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700">
+            <div v-if="residentFiles.length > 0" class="grid grid-cols-3 gap-2 mt-3">
+              <div v-for="(item, idx) in residentFiles" :key="idx" class="relative group rounded border border-slate-200 overflow-hidden bg-slate-900 aspect-video flex items-center justify-center">
+                <img v-if="item.type.startsWith('image')" :src="item.data" class="w-full h-full object-cover">
+                <video v-else-if="item.type.startsWith('video')" :src="item.data" class="w-full h-full object-cover"></video>
+                <button type="button" @click="residentFiles.splice(idx, 1)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700">
                   <i class="fa-solid fa-xmark"></i>
                 </button>
               </div>
@@ -130,7 +121,7 @@
 
           <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition flex justify-center items-center">
             <i class="fa-solid fa-paper-plane mr-2" :class="{ 'fa-spin': submitting }"></i>
-            {{ submitting ? '正在送出...' : '送出反映案件' }}
+            {{ submitting ? '正在儲存中...' : '送出反映案件' }}
           </button>
         </form>
       </div>
@@ -142,7 +133,7 @@
           <button @click="trackKeyword = ''" v-if="trackKeyword" class="text-xs text-slate-400 px-2">清空</button>
         </div>
 
-        <div v-if="filteredResidentIssues.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-400 text-sm">
+        <div v-if="filteredResidentIssues.length === 0" class="text-center py-10 bg-white rounded-lg border border-slate-200 text-slate-400 text-sm">
           目前查無相關反映案件紀錄
         </div>
 
@@ -160,16 +151,13 @@
 
           <p class="text-sm text-slate-600 mb-3 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
 
-          <!-- 佐證附件 -->
-          <div v-if="parseFiles(issue.file).length > 0" class="mb-3">
+          <!-- 住戶佐證相片/影片 -->
+          <div v-if="issue.files && issue.files.length > 0" class="mb-3">
             <div class="text-xs font-medium text-slate-500 mb-1.5"><i class="fa-solid fa-paperclip mr-1"></i>住戶通報佐證資料：</div>
             <div class="grid grid-cols-3 gap-2">
-              <div v-for="(f, i) in parseFiles(issue.file)" :key="i" class="rounded overflow-hidden border border-slate-200 bg-black aspect-video flex items-center justify-center">
-                <a :href="f.url" target="_blank" class="w-full h-full flex items-center justify-center">
-                  <img v-if="f.type.startsWith('image')" :src="f.url" class="w-full h-full object-cover">
-                  <video v-else-if="f.type.startsWith('video')" :src="f.url" class="w-full h-full object-cover"></video>
-                  <span v-else class="text-xs text-white p-1 text-center truncate">檔案</span>
-                </a>
+              <div v-for="(f, i) in issue.files" :key="i" class="rounded overflow-hidden border border-slate-200 bg-black aspect-video flex items-center justify-center">
+                <img v-if="f.type.startsWith('image')" :src="f.data" class="w-full h-full object-cover">
+                <video v-else-if="f.type.startsWith('video')" :src="f.data" controls class="w-full h-full object-cover"></video>
               </div>
             </div>
           </div>
@@ -183,15 +171,17 @@
             <div v-if="issue.finalReply" class="text-sm bg-emerald-50/70 border border-emerald-100 text-slate-700 p-3 rounded">
               <p class="whitespace-pre-line">{{ issue.finalReply }}</p>
 
-              <div v-if="parseFiles(issue.replyFiles).length > 0" class="mt-2.5 pt-2 border-t border-emerald-200/60">
+              <!-- 主任佐證多媒體檔案 (最多5個) -->
+              <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="mt-2.5 pt-2 border-t border-emerald-200/60">
                 <div class="text-[11px] font-bold text-emerald-800 mb-1"><i class="fa-solid fa-folder-open mr-1"></i>管委會處置憑證 / 佐證文件：</div>
-                <div class="flex flex-wrap gap-2">
-                  <a v-for="(rf, rIdx) in parseFiles(issue.replyFiles)" :key="rIdx" :href="rf.url" target="_blank" class="inline-flex items-center text-xs bg-white text-emerald-700 border border-emerald-300 px-2 py-1 rounded shadow-sm hover:bg-emerald-50">
-                    <i v-if="rf.type.startsWith('image')" class="fa-solid fa-image mr-1"></i>
-                    <i v-else-if="rf.type.startsWith('video')" class="fa-solid fa-video mr-1"></i>
-                    <i v-else class="fa-solid fa-file-lines mr-1"></i>
-                    {{ rf.name || '檢視附加檔案' }}
-                  </a>
+                <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-1">
+                  <div v-for="(rf, rIdx) in issue.replyFiles" :key="rIdx" class="rounded overflow-hidden border border-emerald-300 aspect-video bg-black flex items-center justify-center">
+                    <img v-if="rf.type.startsWith('image')" :src="rf.data" class="w-full h-full object-cover">
+                    <video v-else-if="rf.type.startsWith('video')" :src="rf.data" controls class="w-full h-full object-cover"></video>
+                    <a v-else :href="rf.data" :download="rf.name" class="text-[10px] text-white p-1 text-center truncate underline">
+                      <i class="fa-solid fa-download mr-1"></i>{{ rf.name }}
+                    </a>
+                  </div>
                 </div>
               </div>
 
@@ -207,6 +197,21 @@
 
     <!-- ================= 管理後台 ================= -->
     <div v-if="isAdmin" class="space-y-6">
+
+      <!-- 後台資料管理：備份與還原工具列 -->
+      <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
+        <span class="font-bold text-emerald-800"><i class="fa-solid fa-database mr-1"></i>本機安全資料庫 (大容量儲存模式)</span>
+        <div class="flex gap-2">
+          <button @click="exportBackup" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow transition">
+            <i class="fa-solid fa-download mr-1"></i>匯出完整備份檔
+          </button>
+          <label class="bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-100 px-2.5 py-1.5 rounded shadow cursor-pointer transition">
+            <i class="fa-solid fa-upload mr-1"></i>匯入還原備份
+            <input type="file" accept=".json" @change="importBackup" class="hidden">
+          </label>
+        </div>
+      </div>
+
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div class="bg-white p-3 rounded border-l-4 border-amber-500 shadow-sm">
           <div class="text-xs text-slate-500">待分派 / 處理中</div>
@@ -256,14 +261,14 @@
             
             <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
 
-            <div v-if="parseFiles(issue.file).length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
+            <!-- 住戶相片預覽 -->
+            <div v-if="issue.files && issue.files.length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
               <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片/影片：</div>
-              <div class="grid grid-cols-4 gap-2">
-                <a v-for="(f, fi) in parseFiles(issue.file)" :key="fi" :href="f.url" target="_blank" class="rounded overflow-hidden border border-slate-200 aspect-video bg-black flex items-center justify-center">
-                  <img v-if="f.type.startsWith('image')" :src="f.url" class="w-full h-full object-cover">
-                  <video v-else-if="f.type.startsWith('video')" :src="f.url" class="w-full h-full object-cover"></video>
-                  <span v-else class="text-xs text-white">檔案</span>
-                </a>
+              <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                <div v-for="(f, fi) in issue.files" :key="fi" class="rounded overflow-hidden border border-slate-200 aspect-video bg-black flex items-center justify-center">
+                  <img v-if="f.type.startsWith('image')" :src="f.data" class="w-full h-full object-cover">
+                  <video v-else-if="f.type.startsWith('video')" :src="f.data" controls class="w-full h-full object-cover"></video>
+                </div>
               </div>
             </div>
 
@@ -308,29 +313,27 @@
               </div>
               <textarea v-model="issue.tempFinalReply" rows="2" placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." class="w-full border border-slate-300 rounded p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"></textarea>
               
-              <!-- 擴充至最多 5 個檔案 -->
               <div>
                 <div class="flex justify-between items-center mb-1">
                   <label class="block text-slate-700 font-medium">附加處置憑證 / 相片 / 影片 / 檔案 (最多 5 個)：</label>
-                  <span class="text-[11px]" :class="(issue.pendingFiles?.length || 0) >= 5 ? 'text-amber-600 font-bold' : 'text-slate-400'">
-                    待上傳：{{ issue.pendingFiles?.length || 0 }} / 5
+                  <span class="text-[11px]" :class="(issue.replyFiles?.length || 0) >= 5 ? 'text-amber-600 font-bold' : 'text-slate-400'">
+                    目前附件：{{ issue.replyFiles?.length || 0 }} / 5
                   </span>
                 </div>
 
                 <input 
                   type="file" 
                   multiple 
-                  :disabled="(issue.pendingFiles?.length || 0) >= 5"
+                  :disabled="(issue.replyFiles?.length || 0) >= 5"
                   @change="handleAdminFileUpload(issue, $event)" 
                   class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-emerald-100 file:text-emerald-800 disabled:opacity-50">
 
-                <!-- 待上傳縮圖及檔案清單預覽 -->
-                <div v-if="issue.pendingFilePreviews && issue.pendingFilePreviews.length > 0" class="grid grid-cols-5 gap-1.5 mt-2">
-                  <div v-for="(p, pIdx) in issue.pendingFilePreviews" :key="pIdx" class="relative group rounded border border-slate-300 aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-                    <img v-if="p.type.startsWith('image')" :src="p.url" class="w-full h-full object-cover">
-                    <video v-else-if="p.type.startsWith('video')" :src="p.url" class="w-full h-full object-cover"></video>
+                <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-5 gap-1.5 mt-2">
+                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative group rounded border border-slate-300 aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
+                    <img v-if="p.type.startsWith('image')" :src="p.data" class="w-full h-full object-cover">
+                    <video v-else-if="p.type.startsWith('video')" :src="p.data" class="w-full h-full object-cover"></video>
                     <div v-else class="text-[10px] text-white p-1 text-center truncate w-full">{{ p.name }}</div>
-                    <button type="button" @click="removeAdminPendingFile(issue, pIdx)" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
+                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); saveToDB();" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
                   </div>
@@ -360,37 +363,77 @@
 </div>
 
 <script>
-  // 👇 請於 352 與 353 行填妥你的 Supabase 設定：
-  const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
-  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRgjetRtsx7KF0YFOuN3zng2F30wvvTCPjQdZiBvc3xtnMkdT-uih2pMOtMU1MF5zxIQ/exec';
+  // ================= IndexedDB 大容量離線資料庫封裝 =================
+  const DB_NAME = 'CommunityDB';
+  const STORE_NAME = 'issues_store';
 
-  let supabaseClient = null;
-  try {
-    if (SUPABASE_URL && SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('請貼上')) {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-  } catch (e) {
-    console.warn('Supabase 初始化略過：', e);
+  function initDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function dbGetAll() {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  }
+
+  async function dbPut(item) {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.put(JSON.parse(JSON.stringify(item)));
+      tx.oncomplete = () => resolve();
+    });
+  }
+
+  async function dbClearAndBulkPut(items) {
+    const db = await initDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      for (const item of items) {
+        store.put(JSON.parse(JSON.stringify(item)));
+      }
+      tx.oncomplete = () => resolve();
+    });
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ name: file.name, type: file.type, data: reader.result });
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
   }
 
   const { createApp } = Vue;
 
   createApp({
     data() {
-      let saved = [];
-      try {
-        const local = localStorage.getItem('community_issues');
-        if (local) saved = JSON.parse(local);
-      } catch(e) {}
-
       return {
         isAdmin: false,
         residentTab: 'submit',
         trackKeyword: '',
         adminSearch: '',
         adminFilterCategory: '',
-        loading: false,
         submitting: false,
         form: {
           unit: '',
@@ -398,9 +441,8 @@
           category: '公設修繕',
           description: ''
         },
-        residentFiles: [],
-        residentFilePreviews: [],
-        issues: saved
+        residentFiles: [], // 住戶選取的檔案 (最多3筆)
+        issues: []
       };
     },
     computed: {
@@ -423,129 +465,47 @@
         });
       }
     },
-    mounted() {
-      this.fetchIssues();
+    async mounted() {
+      // 載入 IndexedDB 內部所有大容量紀錄，保證不蒸發
+      const all = await dbGetAll();
+      this.issues = all.reverse();
     },
     methods: {
-      saveLocal() {
-        try {
-          localStorage.setItem('community_issues', JSON.stringify(this.issues));
-        } catch(e) {}
-      },
       toggleViewMode() {
         this.isAdmin = !this.isAdmin;
       },
-      parseFiles(fileData) {
-        if (!fileData) return [];
-        try {
-          return typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
-        } catch(e) {
-          return [];
+      async saveToDB() {
+        for (const item of this.issues) {
+          await dbPut(item);
         }
       },
-      handleResidentFileUpload(e) {
+      async handleResidentFileUpload(e) {
         const files = Array.from(e.target.files);
         if (this.residentFiles.length + files.length > 3) {
-          alert('相片與影片最多只能選取 3 則！');
+          alert('佐證相片與影片最多只能選取 3 則！');
           return;
         }
         for (const file of files) {
-          this.residentFiles.push(file);
-          this.residentFilePreviews.push({
-            name: file.name,
-            type: file.type,
-            url: URL.createObjectURL(file)
-          });
+          const res = await fileToBase64(file);
+          if (res) this.residentFiles.push(res);
         }
       },
-      removeResidentFile(idx) {
-        this.residentFiles.splice(idx, 1);
-        this.residentFilePreviews.splice(idx, 1);
-      },
-      handleAdminFileUpload(issue, e) {
-        if (!issue.pendingFiles) issue.pendingFiles = [];
-        if (!issue.pendingFilePreviews) issue.pendingFilePreviews = [];
-        
+      async handleAdminFileUpload(issue, e) {
+        if (!issue.replyFiles) issue.replyFiles = [];
         const files = Array.from(e.target.files);
-        if (issue.pendingFiles.length + files.length > 5) {
+        if (issue.replyFiles.length + files.length > 5) {
           alert('主任處置憑證/檔案最多只能上傳 5 個！');
           return;
         }
-
         for (const file of files) {
-          issue.pendingFiles.push(file);
-          issue.pendingFilePreviews.push({
-            name: file.name,
-            type: file.type,
-            url: URL.createObjectURL(file)
-          });
+          const res = await fileToBase64(file);
+          if (res) issue.replyFiles.push(res);
         }
-      },
-      removeAdminPendingFile(issue, idx) {
-        issue.pendingFiles.splice(idx, 1);
-        issue.pendingFilePreviews.splice(idx, 1);
-      },
-      async uploadToSupabase(files) {
-        if (!supabaseClient) return [];
-        const uploaded = [];
-        for (const file of files) {
-          const cleanName = `${Date.now()}_${Math.floor(Math.random()*1000)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
-          const { data, error } = await supabaseClient.storage
-            .from('community-files')
-            .upload(cleanName, file);
-          
-          if (!error) {
-            const { data: pubData } = supabaseClient.storage
-              .from('community-files')
-              .getPublicUrl(cleanName);
-            uploaded.push({
-              name: file.name,
-              type: file.type,
-              url: pubData.publicUrl
-            });
-          }
-        }
-        return uploaded;
-      },
-      async fetchIssues() {
-        if (!supabaseClient) return;
-        this.loading = true;
-        
-        const timer = setTimeout(() => {
-          this.loading = false;
-        }, 2000);
-
-        try {
-          const { data, error } = await supabaseClient
-            .from('issues')
-            .select('*')
-            .order('createdAt', { ascending: false });
-
-          if (!error && Array.isArray(data) && data.length > 0) {
-            this.issues = data.map(item => ({
-              ...item,
-              tempNote: '',
-              tempFinalReply: item.finalReply || '',
-              pendingFiles: [],
-              pendingFilePreviews: []
-            }));
-            this.saveLocal();
-          }
-        } catch (err) {
-          console.warn('載入雲端資料完成');
-        } finally {
-          clearTimeout(timer);
-          this.loading = false;
-        }
+        await dbPut(issue);
       },
       async submitIssue() {
         this.submitting = true;
         try {
-          let uploadedFiles = [];
-          if (this.residentFiles.length > 0 && supabaseClient) {
-            uploadedFiles = await this.uploadToSupabase(this.residentFiles);
-          }
-
           const date = new Date();
           const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
           const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
@@ -556,84 +516,40 @@
             phone: this.form.phone,
             category: this.form.category,
             description: this.form.description,
-            file: JSON.stringify(uploadedFiles),
+            files: [...this.residentFiles],
             createdAt: timeStr,
             status: '待分派',
             assignedTo: '總幹事/主任',
             internalNotes: [],
             finalReply: '',
             repliedAt: '',
-            replyFiles: '[]'
+            replyFiles: []
           };
 
-          if (supabaseClient) {
-            await supabaseClient.from('issues').insert([newIssue]);
-          }
+          // 存入 IndexedDB
+          await dbPut(newIssue);
+          this.issues.unshift(newIssue);
 
-          if (GOOGLE_SCRIPT_URL) {
-            const formData = new URLSearchParams();
-            formData.append('action', 'create');
-            formData.append('data', JSON.stringify(newIssue));
-            fetch(GOOGLE_SCRIPT_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: formData.toString()
-            }).catch(e => console.warn('Google 試算表同步排程中'));
-          }
-
-          this.issues.unshift({ ...newIssue, tempNote: '', tempFinalReply: '', pendingFiles: [], pendingFilePreviews: [] });
-          this.saveLocal();
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n資料庫與 Google 試算表已同步更新。`);
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n已安全備份至本機資料庫。`);
           
           this.form.unit = '';
           this.form.phone = '';
           this.form.description = '';
           this.residentFiles = [];
-          this.residentFilePreviews = [];
           this.residentTab = 'track';
           this.trackKeyword = caseId;
         } catch (err) {
-          console.error(err);
-          alert('送出失敗，請確認網路連線！');
+          alert('儲存失敗：' + err);
         } finally {
           this.submitting = false;
         }
       },
-      async syncUpdate(issue) {
-        this.saveLocal();
-        if (supabaseClient) {
-          await supabaseClient
-            .from('issues')
-            .update({
-              status: issue.status,
-              assignedTo: issue.assignedTo,
-              internalNotes: issue.internalNotes,
-              finalReply: issue.finalReply,
-              repliedAt: issue.repliedAt,
-              replyFiles: issue.replyFiles
-            })
-            .eq('id', issue.id);
-        }
-
-        if (GOOGLE_SCRIPT_URL) {
-          const formData = new URLSearchParams();
-          formData.append('action', 'update');
-          formData.append('data', JSON.stringify(issue));
-          fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData.toString()
-          }).catch(e => console.warn('試算表同步更新排程中'));
-        }
-      },
-      assignIssue(issue, role) {
+      async assignIssue(issue, role) {
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
-        this.syncUpdate(issue);
+        await dbPut(issue);
       },
-      addInternalNote(issue) {
+      async addInternalNote(issue) {
         if (!issue.tempNote.trim()) return;
         const now = new Date();
         const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -644,20 +560,12 @@
           time: timeStr
         });
         issue.tempNote = '';
-        this.syncUpdate(issue);
+        await dbPut(issue);
       },
       async publishToResident(issue, status) {
         if (!issue.tempFinalReply.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
-        }
-
-        if (issue.pendingFiles && issue.pendingFiles.length > 0 && supabaseClient) {
-          const uploaded = await this.uploadToSupabase(issue.pendingFiles);
-          const currentFiles = this.parseFiles(issue.replyFiles);
-          issue.replyFiles = JSON.stringify([...currentFiles, ...uploaded]);
-          issue.pendingFiles = [];
-          issue.pendingFilePreviews = [];
         }
 
         if (issue.tempFinalReply.trim()) {
@@ -666,8 +574,37 @@
         issue.status = status;
         const now = new Date();
         issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-        await this.syncUpdate(issue);
+        
+        await dbPut(issue);
         alert(`已成功發布回覆與憑證！狀態已變更為【${status}】。`);
+      },
+      // 匯出完整備份檔 (包含照片、影片、案件紀錄)
+      exportBackup() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.issues));
+        const dlAnchor = document.createElement('a');
+        dlAnchor.setAttribute("href", dataStr);
+        dlAnchor.setAttribute("download", `最上境社區案件備份_${new Date().toISOString().slice(0,10)}.json`);
+        dlAnchor.click();
+        dlAnchor.remove();
+      },
+      // 匯入還原備份
+      importBackup(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const imported = JSON.parse(event.target.result);
+            if (Array.isArray(imported)) {
+              await dbClearAndBulkPut(imported);
+              this.issues = imported;
+              alert('備份還原成功！所有相片、影片與紀錄已完整載入。');
+            }
+          } catch(err) {
+            alert('檔案格式錯誤，無法還原！');
+          }
+        };
+        reader.readAsText(file);
       },
       countStatus(st) {
         return this.issues.filter(i => i.status === st).length;

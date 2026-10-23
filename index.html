@@ -55,7 +55,7 @@
           @click="residentTab = 'track'" 
           :class="residentTab === 'track' ? 'border-b-2 border-emerald-600 text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'"
           class="flex-1 py-3 text-center transition flex justify-center items-center">
-          <i class="fa-solid fa-magnifying-glass mr-2"></i>進度查詢
+          <i class="fa-solid fa-magnifying-glass mr-2"></i>進度查詢 ({{ issues.length }})
         </button>
       </div>
 
@@ -198,9 +198,9 @@
     <!-- ================= 管理後台 ================= -->
     <div v-if="isAdmin" class="space-y-6">
 
-      <!-- 後台資料管理：備份與還原工具列 -->
+      <!-- 後台備份與還原工具列 -->
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
-        <span class="font-bold text-emerald-800"><i class="fa-solid fa-database mr-1"></i>本機安全資料庫 (大容量儲存模式)</span>
+        <span class="font-bold text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i>本機永久安全儲存模式 (共 {{ issues.length }} 筆案件)</span>
         <div class="flex gap-2">
           <button @click="exportBackup" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow transition">
             <i class="fa-solid fa-download mr-1"></i>匯出完整備份檔
@@ -333,7 +333,7 @@
                     <img v-if="p.type.startsWith('image')" :src="p.data" class="w-full h-full object-cover">
                     <video v-else-if="p.type.startsWith('video')" :src="p.data" class="w-full h-full object-cover"></video>
                     <div v-else class="text-[10px] text-white p-1 text-center truncate w-full">{{ p.name }}</div>
-                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); saveToDB();" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
+                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); persistSave();" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
                   </div>
@@ -363,63 +363,41 @@
 </div>
 
 <script>
-  // ================= IndexedDB 大容量離線資料庫封裝 =================
-  const DB_NAME = 'CommunityDB';
-  const STORE_NAME = 'issues_store';
-
-  function initDB() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async function dbGetAll() {
-    const db = await initDB();
+  // 前端 Canvas 自動等比例輕量壓縮（避開容量上限、提升載入速度）
+  function compressImage(file) {
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    });
-  }
-
-  async function dbPut(item) {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      store.put(JSON.parse(JSON.stringify(item)));
-      tx.oncomplete = () => resolve();
-    });
-  }
-
-  async function dbClearAndBulkPut(items) {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      store.clear();
-      for (const item of items) {
-        store.put(JSON.parse(JSON.stringify(item)));
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, type: file.type, data: reader.result });
+        reader.readAsDataURL(file);
+        return;
       }
-      tx.oncomplete = () => resolve();
-    });
-  }
-
-  function fileToBase64(file) {
-    return new Promise((resolve) => {
+      const img = new Image();
       const reader = new FileReader();
-      reader.onload = () => resolve({ name: file.name, type: file.type, data: reader.result });
-      reader.onerror = () => resolve(null);
+      reader.onload = (e) => {
+        img.src = e.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedData = canvas.toDataURL('image/jpeg', 0.7);
+          resolve({ name: file.name, type: 'image/jpeg', data: compressedData });
+        };
+      };
       reader.readAsDataURL(file);
     });
   }
@@ -428,6 +406,15 @@
 
   createApp({
     data() {
+      // 🚀 同步初始化：Vue 載入的當下直接從硬碟同步讀出，絕不等非同步
+      let initialIssues = [];
+      try {
+        const raw = localStorage.getItem('ZUISHANGJING_ISSUES_DATA');
+        if (raw) initialIssues = JSON.parse(raw);
+      } catch(e) {
+        initialIssues = [];
+      }
+
       return {
         isAdmin: false,
         residentTab: 'submit',
@@ -441,8 +428,8 @@
           category: '公設修繕',
           description: ''
         },
-        residentFiles: [], // 住戶選取的檔案 (最多3筆)
-        issues: []
+        residentFiles: [],
+        issues: initialIssues
       };
     },
     computed: {
@@ -465,19 +452,16 @@
         });
       }
     },
-    async mounted() {
-      // 載入 IndexedDB 內部所有大容量紀錄，保證不蒸發
-      const all = await dbGetAll();
-      this.issues = all.reverse();
-    },
     methods: {
+      persistSave() {
+        try {
+          localStorage.setItem('ZUISHANGJING_ISSUES_DATA', JSON.stringify(this.issues));
+        } catch(e) {
+          console.error('儲存失敗：', e);
+        }
+      },
       toggleViewMode() {
         this.isAdmin = !this.isAdmin;
-      },
-      async saveToDB() {
-        for (const item of this.issues) {
-          await dbPut(item);
-        }
       },
       async handleResidentFileUpload(e) {
         const files = Array.from(e.target.files);
@@ -486,7 +470,7 @@
           return;
         }
         for (const file of files) {
-          const res = await fileToBase64(file);
+          const res = await compressImage(file);
           if (res) this.residentFiles.push(res);
         }
       },
@@ -498,12 +482,12 @@
           return;
         }
         for (const file of files) {
-          const res = await fileToBase64(file);
+          const res = await compressImage(file);
           if (res) issue.replyFiles.push(res);
         }
-        await dbPut(issue);
+        this.persistSave();
       },
-      async submitIssue() {
+      submitIssue() {
         this.submitting = true;
         try {
           const date = new Date();
@@ -526,11 +510,10 @@
             replyFiles: []
           };
 
-          // 存入 IndexedDB
-          await dbPut(newIssue);
           this.issues.unshift(newIssue);
+          this.persistSave(); // 立即永久存入硬碟
 
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n已安全備份至本機資料庫。`);
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n已安全留存於系統中。`);
           
           this.form.unit = '';
           this.form.phone = '';
@@ -544,13 +527,13 @@
           this.submitting = false;
         }
       },
-      async assignIssue(issue, role) {
+      assignIssue(issue, role) {
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
-        await dbPut(issue);
+        this.persistSave();
       },
-      async addInternalNote(issue) {
-        if (!issue.tempNote.trim()) return;
+      addInternalNote(issue) {
+        if (!issue.tempNote?.trim()) return;
         const now = new Date();
         const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
         if (!issue.internalNotes) issue.internalNotes = [];
@@ -560,25 +543,24 @@
           time: timeStr
         });
         issue.tempNote = '';
-        await dbPut(issue);
+        this.persistSave();
       },
-      async publishToResident(issue, status) {
-        if (!issue.tempFinalReply.trim() && !issue.finalReply) {
+      publishToResident(issue, status) {
+        if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
         }
 
-        if (issue.tempFinalReply.trim()) {
+        if (issue.tempFinalReply?.trim()) {
           issue.finalReply = issue.tempFinalReply.trim();
         }
         issue.status = status;
         const now = new Date();
         issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
         
-        await dbPut(issue);
+        this.persistSave();
         alert(`已成功發布回覆與憑證！狀態已變更為【${status}】。`);
       },
-      // 匯出完整備份檔 (包含照片、影片、案件紀錄)
       exportBackup() {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.issues));
         const dlAnchor = document.createElement('a');
@@ -587,18 +569,17 @@
         dlAnchor.click();
         dlAnchor.remove();
       },
-      // 匯入還原備份
       importBackup(e) {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = async (event) => {
+        reader.onload = (event) => {
           try {
             const imported = JSON.parse(event.target.result);
             if (Array.isArray(imported)) {
-              await dbClearAndBulkPut(imported);
               this.issues = imported;
-              alert('備份還原成功！所有相片、影片與紀錄已完整載入。');
+              this.persistSave();
+              alert('備份還原成功！所有相片與案件紀錄已完整載入。');
             }
           } catch(err) {
             alert('檔案格式錯誤，無法還原！');

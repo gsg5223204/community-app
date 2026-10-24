@@ -114,7 +114,7 @@
         </form>
       </div>
 
-      <!-- 進度查詢 (已封存的案件會隱藏或提示已封存) -->
+      <!-- 進度查詢 -->
       <div v-if="residentTab === 'track'" class="space-y-4">
         <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
           <div class="font-bold text-sm text-slate-800"><i class="fa-solid fa-user-lock text-emerald-600 mr-2"></i>案件進度雙重核驗查詢</div>
@@ -275,8 +275,8 @@
                 <span class="text-[11px] text-amber-700">目前分派至：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
               </div>
 
-              <!-- 指派選項 -->
-              <div v-if="!issue.isArchived" class="flex flex-wrap gap-2 items-center">
+              <!-- 指派選項 (結案或封存後鎖定) -->
+              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex flex-wrap gap-2 items-center">
                 <span class="text-slate-600">更換指派：</span>
                 <select @change="assignIssueWithAuth(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
                   <option disabled selected value="">選擇分派對象</option>
@@ -295,12 +295,12 @@
               <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200">
                 <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700 flex justify-between items-center">
                   <span>• <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span></span>
-                  <button v-if="!issue.isArchived" @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
+                  <button v-if="!issue.isArchived && issue.status !== '已結案'" @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
                 </div>
               </div>
 
               <!-- 填寫內部意見 -->
-              <div v-if="!issue.isArchived" class="flex gap-2 pt-1">
+              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex gap-2 pt-1">
                 <input 
                   v-model="issue.tempNote" 
                   @focus="checkNoteInputAuth(issue)" 
@@ -318,14 +318,14 @@
             <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
               <div class="font-bold text-emerald-900"><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布</div>
               <textarea 
-                v-if="!issue.isArchived"
+                v-if="!issue.isArchived && issue.status !== '已結案'"
                 v-model="issue.tempFinalReply" 
                 @focus="checkFinalReplyAuth(issue)" 
                 rows="2" 
                 placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." 
                 class="w-full border rounded p-2 text-xs outline-none"></textarea>
-              <div v-else class="text-slate-700 bg-white p-2 rounded border border-slate-200 whitespace-pre-line">
-                {{ issue.finalReply || '（此案件封存無結案回覆紀錄）' }}
+              <div v-else class="text-slate-700 bg-white p-2.5 rounded border border-slate-200 whitespace-pre-line text-xs">
+                {{ issue.finalReply || '（此案件尚無公開回覆紀錄）' }}
               </div>
               
               <div v-if="issue.replyFiles && issue.replyFiles.length > 0">
@@ -334,12 +334,12 @@
                   <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
                     <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
                     <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
-                    <button v-if="!issue.isArchived" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
+                    <button v-if="!issue.isArchived && issue.status !== '已結案'" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
               </div>
 
-              <div v-if="!issue.isArchived" class="pt-1">
+              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="pt-1">
                 <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
                 <input 
                   type="file" 
@@ -356,7 +356,6 @@
                   <button @click="copyLineNotifyLink(issue)" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center">
                     <i class="fa-brands fa-line text-sm mr-1"></i>LINE 連結
                   </button>
-                  <!-- 複製專屬獨立備查連結 -->
                   <button @click="copyArchiveRecordLink(issue)" class="bg-slate-700 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded text-xs flex items-center">
                     <i class="fa-solid fa-link text-xs mr-1"></i>複製備查專用連結
                   </button>
@@ -364,15 +363,33 @@
                 
                 <div class="flex items-center gap-2">
                   <template v-if="!issue.isArchived">
-                    <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs">更新進度</button>
-                    <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs">正式結案發布</button>
-                    <!-- 隱藏/封存整筆案件（需主任密碼） -->
+                    <!-- 更新進度 (若已結案則停用) -->
+                    <button 
+                      @click="publishToResident(issue, '處理中')" 
+                      :disabled="issue.status === '已結案'" 
+                      :class="issue.status === '已結案' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'"
+                      class="px-3 py-1.5 rounded text-xs transition">
+                      更新進度
+                    </button>
+
+                    <!-- 正式結案發布 (結案後變色為深灰色並停用按鈕) -->
+                    <button 
+                      @click="publishToResident(issue, '已結案')" 
+                      :disabled="issue.status === '已結案'" 
+                      :class="issue.status === '已結案' ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold'"
+                      class="px-3 py-1.5 rounded text-xs transition flex items-center gap-1">
+                      <i v-if="issue.status === '已結案'" class="fa-solid fa-circle-check text-emerald-600"></i>
+                      {{ issue.status === '已結案' ? '已結案發布' : '正式結案發布' }}
+                    </button>
+
+                    <!-- 封存隱藏 -->
                     <button @click="archiveIssueWithAuth(issue)" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center gap-1" title="從前台與常規看板隱藏，存入備查庫">
                       <i class="fa-solid fa-box-archive"></i>封存隱藏
                     </button>
                   </template>
+
                   <template v-else>
-                    <!-- 備查庫操作：還原或徹底銷毀 -->
+                    <!-- 備查庫操作 -->
                     <button @click="unarchiveIssueWithAuth(issue)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-xs">
                       <i class="fa-solid fa-rotate-left mr-1"></i>解除封存還原
                     </button>
@@ -555,7 +572,7 @@
         if (!kw || !pwd) return [];
 
         return this.issues.filter(i => {
-          if (i.isArchived) return false; // 封存隱藏
+          if (i.isArchived) return false;
           const matchCodeOrUnit = (i.id && i.id.toLowerCase().includes(kw)) || (i.unit && i.unit.toLowerCase().includes(kw));
           const matchPwd = (i.queryPassword && i.queryPassword.toString().trim() === pwd);
           return matchCodeOrUnit && matchPwd;
@@ -610,7 +627,6 @@
 
       if (code && pwd) {
         if (isArchivedParam === '1') {
-          // 專屬備查直達連結：自動解鎖後台備查庫檢視
           this.isAdmin = true;
           this.showArchived = true;
           this.adminSearch = code;
@@ -736,7 +752,7 @@
         }
       },
 
-      // 複製專屬獨立備查直達連結 (方便管委會另存於 Excel 或雲端文件備查)
+      // 複製專屬獨立備查直達連結
       copyArchiveRecordLink(issue) {
         const baseUrl = window.location.origin + window.location.pathname;
         const recordUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&pwd=${encodeURIComponent(issue.queryPassword)}&archive=1`;
@@ -1052,13 +1068,19 @@
         }
       },
 
+      // 發布進度或正式結案（需主任密碼，結案後自動鎖定按鈕）
       async publishToResident(issue, status) {
+        if (issue.status === '已結案') {
+          alert('此案件已正式結案，無法重複發布！');
+          return;
+        }
+
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
         }
 
-        const inputPwd = prompt('請輸入主任密碼以發布處置結論：');
+        const inputPwd = prompt(`請輸入主任密碼以執行【${status}】發布：`);
         if (inputPwd === null) return;
         if (inputPwd.trim() !== DIRECTOR_PASSWORD) {
           alert('主任密碼錯誤！無法發布。');
@@ -1079,7 +1101,7 @@
         try {
           await this.syncUpdate(issue);
           issue.tempFinalReply = '';
-          alert(`已成功發布！狀態已正式變更為【${status}】。\n雲端資料庫已確認保存！`);
+          alert(`已成功發布！狀態已正式變更為【${status}】。\n若為已結案，發布按鈕已停用並鎖定。`);
         } catch (err) {
           issue.status = oldStatus;
           issue.finalReply = oldReply;

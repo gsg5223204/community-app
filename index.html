@@ -2,7 +2,8 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- 解除 user-scalable=no 鎖定，允許手機端自由縮放圖片 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
   <title>最上境社區 - 住戶線上共好反映系統</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,6 +14,8 @@
   <style>
     [v-cloak] { display: none; }
     input, select, textarea, button { font-size: 16px !important; }
+    /* 確保影片控制面板按鈕不會被裁切 */
+    video { max-height: 280px; width: 100%; object-fit: contain; background: #000; border-radius: 6px; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased font-sans">
@@ -97,11 +100,12 @@
               <span class="text-xs text-slate-400">已選取 {{ residentFiles.length }} / 3</span>
             </div>
             <input type="file" accept="image/*,video/*" multiple @change="handleResidentFileUpload" :disabled="residentFiles.length >= 3" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50">
-            <div v-if="residentFiles.length > 0" class="grid grid-cols-3 gap-2 mt-3">
-              <div v-for="(item, idx) in residentFiles" :key="idx" class="relative rounded border bg-slate-900 aspect-video flex items-center justify-center overflow-hidden">
-                <img v-if="item.type.startsWith('image')" :src="item.data" @click="previewImageUrl = item.data" class="w-full h-full object-cover cursor-pointer">
-                <video v-else :src="item.data" controls class="w-full h-full object-cover"></video>
-                <button type="button" @click="residentFiles.splice(idx, 1)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow"><i class="fa-solid fa-xmark"></i></button>
+            
+            <div v-if="residentFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+              <div v-for="(item, idx) in residentFiles" :key="idx" class="relative rounded-lg border border-slate-200 bg-slate-900 overflow-hidden flex flex-col justify-center items-center p-1">
+                <img v-if="item.type.startsWith('image')" :src="item.data" @click="openImageModal(item.data)" class="w-full h-32 object-cover rounded cursor-pointer hover:opacity-90 transition">
+                <video v-else :src="item.data" controls playsinline preload="metadata" class="w-full h-32"></video>
+                <button type="button" @click="residentFiles.splice(idx, 1)" class="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-700 z-10"><i class="fa-solid fa-xmark"></i></button>
               </div>
             </div>
           </div>
@@ -145,10 +149,14 @@
 
           <p class="text-sm text-slate-600 mb-3 bg-slate-50 p-2.5 rounded">{{ issue.description }}</p>
 
-          <div v-if="issue.files && issue.files.length > 0" class="grid grid-cols-3 gap-2 mb-3">
-            <div v-for="(f, i) in issue.files" :key="i" class="rounded overflow-hidden border aspect-video bg-black flex items-center justify-center">
-              <img v-if="f.type.startsWith('image')" :src="f.data" @click="previewImageUrl = f.data" class="w-full h-full object-cover cursor-pointer">
-              <video v-else :src="f.data" controls class="w-full h-full object-cover"></video>
+          <!-- 住戶檢附檔案（修正影片全螢幕與按鈕裁切問題） -->
+          <div v-if="issue.files && issue.files.length > 0" class="mb-3">
+            <div class="text-xs font-semibold text-slate-500 mb-1.5">住戶上傳之附件檔案：</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div v-for="(f, i) in issue.files" :key="i" class="rounded-lg border border-slate-200 bg-slate-900 p-1 flex items-center justify-center">
+                <img v-if="f.type.startsWith('image')" :src="f.data" @click="openImageModal(f.data)" class="w-full h-36 object-cover rounded cursor-pointer hover:opacity-90">
+                <video v-else :src="f.data" controls playsinline preload="metadata" class="w-full h-36"></video>
+              </div>
             </div>
           </div>
 
@@ -158,10 +166,12 @@
             <h4 class="text-xs font-bold text-slate-700 mb-1"><i class="fa-solid fa-clipboard-check text-emerald-600 mr-1.5"></i>管理室／管委會處置回覆：</h4>
             <div v-if="issue.finalReply" class="text-sm bg-emerald-50/70 border border-emerald-100 text-slate-700 p-3 rounded">
               <p class="whitespace-pre-line">{{ issue.finalReply }}</p>
-              <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2 pt-2 border-t border-emerald-200">
-                <div v-for="(rf, rIdx) in issue.replyFiles" :key="rIdx" class="rounded border aspect-video bg-black flex items-center justify-center overflow-hidden">
-                  <img v-if="rf.type.startsWith('image')" :src="rf.data" @click="previewImageUrl = rf.data" class="w-full h-full object-cover cursor-pointer">
-                  <video v-else :src="rf.data" controls class="w-full h-full object-cover"></video>
+              
+              <!-- 管委會處置附件 -->
+              <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-2 border-t border-emerald-200">
+                <div v-for="(rf, rIdx) in issue.replyFiles" :key="rIdx" class="rounded-lg border border-emerald-300 bg-black p-1 flex items-center justify-center">
+                  <img v-if="rf.type.startsWith('image')" :src="rf.data" @click="openImageModal(rf.data)" class="w-full h-28 object-cover rounded cursor-pointer hover:opacity-90">
+                  <video v-else :src="rf.data" controls playsinline preload="metadata" class="w-full h-28"></video>
                 </div>
               </div>
               <div class="text-[11px] text-emerald-700 mt-2 font-medium">回覆時間：{{ issue.repliedAt }} (統整發布：主任)</div>
@@ -236,11 +246,11 @@
             <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
 
             <div v-if="issue.files && issue.files.length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
-              <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片 (點擊放大)：</div>
-              <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                <div v-for="(f, fi) in issue.files" :key="fi" class="rounded overflow-hidden border aspect-video bg-black flex items-center justify-center">
-                  <img v-if="f.type.startsWith('image')" :src="f.data" @click="previewImageUrl = f.data" class="w-full h-full object-cover cursor-pointer">
-                  <video v-else :src="f.data" controls class="w-full h-full object-cover"></video>
+              <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片 (點擊放大相片)：</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div v-for="(f, fi) in issue.files" :key="fi" class="rounded-lg border border-slate-200 bg-slate-900 p-1 flex items-center justify-center">
+                  <img v-if="f.type.startsWith('image')" :src="f.data" @click="openImageModal(f.data)" class="w-full h-28 object-cover rounded cursor-pointer hover:opacity-90">
+                  <video v-else :src="f.data" controls playsinline preload="metadata" class="w-full h-28"></video>
                 </div>
               </div>
             </div>
@@ -287,11 +297,11 @@
               <div>
                 <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
                 <input type="file" multiple accept="image/*,video/*" :disabled="(issue.replyFiles?.length || 0) >= 5" @change="handleAdminFileUpload(issue, $event)" class="w-full text-xs text-slate-500">
-                <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-5 gap-1.5 mt-2">
-                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded border aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="previewImageUrl = p.data" class="w-full h-full object-cover cursor-pointer">
-                    <video v-else :src="p.data" controls class="w-full h-full object-cover"></video>
-                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); syncUpdate(issue);" class="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow"><i class="fa-solid fa-xmark"></i></button>
+                <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
+                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
+                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
+                    <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
+                    <button type="button" @click="issue.replyFiles.splice(pIdx, 1); syncUpdate(issue);" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
               </div>
@@ -312,12 +322,34 @@
     </div>
   </main>
 
-  <!-- 圖片放大預覽燈箱 (Modal) -->
-  <div v-if="previewImageUrl" @click="previewImageUrl = null" class="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-2 sm:p-4 cursor-zoom-out">
-    <button @click.stop="previewImageUrl = null" class="absolute top-4 right-4 text-white text-3xl hover:text-slate-300 w-10 h-10 flex items-center justify-center">
-      <i class="fa-solid fa-xmark"></i>
-    </button>
-    <img :src="previewImageUrl" @click.stop class="max-w-full max-h-[90vh] object-contain rounded shadow-2xl">
+  <!-- 升級版圖片放大燈箱 (支援自由放大、縮小、還原) -->
+  <div v-if="previewImageUrl" class="fixed inset-0 bg-black/95 z-[100] flex flex-col justify-between items-center p-2 select-none">
+    <!-- 燈箱頂部工具列 -->
+    <div class="w-full max-w-4xl flex justify-between items-center p-2 text-white">
+      <div class="flex items-center space-x-3 text-sm">
+        <button @click="zoomIn" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
+          <i class="fa-solid fa-magnifying-glass-plus"></i> 放大
+        </button>
+        <button @click="zoomOut" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
+          <i class="fa-solid fa-magnifying-glass-minus"></i> 縮小
+        </button>
+        <button @click="resetZoom" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
+          <i class="fa-solid fa-arrows-rotate"></i> 100%
+        </button>
+      </div>
+      <button @click="closeImageModal" class="bg-red-600/80 hover:bg-red-600 px-3 py-1.5 rounded-lg text-white font-bold">
+        <i class="fa-solid fa-xmark mr-1"></i>關閉
+      </button>
+    </div>
+
+    <!-- 圖片顯示容器 (支援滾動滑動檢視細節) -->
+    <div class="flex-1 w-full overflow-auto flex items-center justify-center p-2" @click="closeImageModal">
+      <img :src="previewImageUrl" @click.stop :style="{ transform: `scale(${imageScale})`, transition: 'transform 0.15s ease' }" class="max-w-full max-h-[80vh] object-contain origin-center shadow-2xl cursor-grab active:cursor-grabbing">
+    </div>
+    
+    <div class="text-xs text-slate-400 py-1 text-center">
+      提示：可用上方按鈕縮放，或在手機螢幕直接雙指縮放檢視
+    </div>
   </div>
 
   <!-- 匯出彈窗 -->
@@ -377,7 +409,7 @@
     <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
 </div>
-  <script>
+<script>
   // 🔐 後台管理者密碼
   const ADMIN_PASSWORD = '8888';
 
@@ -408,6 +440,7 @@
         loading: false,
         submitting: false,
         previewImageUrl: null, // 點擊放大相片燈箱變數
+        imageScale: 1,         // 圖片縮放比例
         form: {
           unit: '',
           queryPassword: '',
@@ -479,6 +512,29 @@
       }
     },
     methods: {
+      // 圖片縮放與燈箱控制
+      openImageModal(url) {
+        this.previewImageUrl = url;
+        this.imageScale = 1;
+      },
+      closeImageModal() {
+        this.previewImageUrl = null;
+        this.imageScale = 1;
+      },
+      zoomIn() {
+        if (this.imageScale < 3.0) {
+          this.imageScale = Math.round((this.imageScale + 0.25) * 100) / 100;
+        }
+      },
+      zoomOut() {
+        if (this.imageScale > 0.5) {
+          this.imageScale = Math.round((this.imageScale - 0.25) * 100) / 100;
+        }
+      },
+      resetZoom() {
+        this.imageScale = 1;
+      },
+
       promptAdminLogin() {
         const input = prompt('請輸入管理後台密碼：');
         if (input === null) return;
@@ -496,6 +552,7 @@
         this.trackKeyword = '';
         this.trackPassword = '';
       },
+
       // 住戶端上傳直傳 Storage
       async handleResidentFileUpload(e) {
         const files = Array.from(e.target.files);
@@ -536,6 +593,7 @@
           }
         }
       },
+
       // 主任後台附件直傳 Storage
       async handleAdminFileUpload(issue, e) {
         if (!issue.replyFiles) issue.replyFiles = [];
@@ -582,6 +640,7 @@
         }
         this.syncUpdate(issue);
       },
+
       async fetchIssues() {
         if (!supabaseClient) return;
         this.loading = true;
@@ -604,6 +663,7 @@
           this.loading = false;
         }
       },
+
       async submitIssue() {
         if (!this.form.queryPassword.trim()) {
           alert('請設定自訂查詢密碼，以便日後查驗案件！');
@@ -657,6 +717,7 @@
           this.submitting = false;
         }
       },
+
       async syncUpdate(issue) {
         if (!supabaseClient) return;
         const { error } = await supabaseClient
@@ -676,11 +737,13 @@
           throw error;
         }
       },
+
       assignIssue(issue, role) {
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
         this.syncUpdate(issue);
       },
+
       addInternalNote(issue) {
         if (!issue.tempNote?.trim()) return;
         const now = new Date();
@@ -694,6 +757,7 @@
         issue.tempNote = '';
         this.syncUpdate(issue);
       },
+
       async publishToResident(issue, status) {
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
@@ -722,6 +786,7 @@
           alert('雲端更新失敗！狀態未變更。\n詳細原因：' + (err.message || JSON.stringify(err)));
         }
       },
+
       copyLineNotifyLink(issue) {
         const baseUrl = window.location.origin + window.location.pathname;
         const directUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&pwd=${encodeURIComponent(issue.queryPassword)}`;
@@ -737,9 +802,11 @@
           prompt('請手動複製以下訊息傳給住戶：', lineMessage);
         }
       },
+
       openExportModal() {
         this.showExportModal = true;
       },
+
       executeExport() {
         const targetList = this.matchedExportIssues;
         if (targetList.length === 0) {
@@ -817,9 +884,11 @@
 
         this.showExportModal = false;
       },
+
       countStatus(st) {
         return this.issues.filter(i => i.status === st).length;
       },
+
       getStatusBadgeClass(status) {
         switch (status) {
           case '待分派': return 'bg-amber-100 text-amber-800';

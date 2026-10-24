@@ -114,7 +114,7 @@
         </form>
       </div>
 
-      <!-- 進度查詢 -->
+      <!-- 進度查詢 (已封存的案件會隱藏或提示已封存) -->
       <div v-if="residentTab === 'track'" class="space-y-4">
         <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
           <div class="font-bold text-sm text-slate-800"><i class="fa-solid fa-user-lock text-emerald-600 mr-2"></i>案件進度雙重核驗查詢</div>
@@ -183,12 +183,18 @@
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
         <div class="flex items-center gap-1.5 font-bold text-emerald-900">
           <i class="fa-solid fa-shield-halved text-emerald-700"></i>
-          <span>後台管理模式 (雲端連線共 {{ issues.length }} 筆)</span>
+          <span>後台管理模式 (有效案件 {{ activeIssuesCount }} 筆 / 封存備查 {{ archivedIssuesCount }} 筆)</span>
         </div>
-        <!-- 匯出按鈕（需主任/最高密碼 8888 才能點開） -->
-        <button @click="openExportModalWithAuth" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1">
-          <i class="fa-solid fa-file-export"></i>自訂篩選匯出 (主任專用)
-        </button>
+        <div class="flex items-center gap-2">
+          <!-- 封存備查庫切換開關 -->
+          <button @click="toggleArchiveView" :class="showArchived ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-600 hover:bg-slate-700'" class="text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1 transition">
+            <i class="fa-solid fa-box-archive"></i>{{ showArchived ? '返回常規看板' : '封存備查庫 (需主任密碼)' }}
+          </button>
+          <!-- 匯出按鈕 -->
+          <button @click="openExportModalWithAuth" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1">
+            <i class="fa-solid fa-file-export"></i>自訂匯出
+          </button>
+        </div>
       </div>
 
       <!-- 看板統計 -->
@@ -206,8 +212,8 @@
           <div class="text-xl font-bold text-emerald-600">{{ countStatus('已結案') }}</div>
         </div>
         <div class="bg-white p-3 rounded border-l-4 border-slate-400 shadow-sm">
-          <div class="text-xs text-slate-500">總累計案件</div>
-          <div class="text-xl font-bold text-slate-700">{{ issues.length }}</div>
+          <div class="text-xs text-slate-500">看板中案件</div>
+          <div class="text-xl font-bold text-slate-700">{{ currentDisplayIssues.length }}</div>
         </div>
       </div>
 
@@ -226,10 +232,17 @@
 
       <!-- 案件列表 -->
       <div class="space-y-4">
-        <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <div v-if="filteredAdminIssues.length === 0" class="text-center py-10 bg-white rounded-lg border text-slate-400 text-sm">
+          {{ showArchived ? '封存庫目前無任何備查案件。' : '目前看板無符合條件的反映案件。' }}
+        </div>
+
+        <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" :class="{ 'ring-2 ring-amber-300': issue.isArchived }">
           <div class="bg-slate-50 px-4 py-2.5 border-b flex justify-between items-center text-xs">
             <span class="font-mono text-slate-500">{{ issue.id }} | {{ issue.createdAt }}</span>
-            <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
+            <div class="flex items-center gap-1.5">
+              <span v-if="issue.isArchived" class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full"><i class="fa-solid fa-box-archive mr-1"></i>已封存備查</span>
+              <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
+            </div>
           </div>
 
           <div class="p-4 space-y-3">
@@ -262,8 +275,8 @@
                 <span class="text-[11px] text-amber-700">目前分派至：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
               </div>
 
-              <!-- 指派選項（需主任密碼） -->
-              <div class="flex flex-wrap gap-2 items-center">
+              <!-- 指派選項 -->
+              <div v-if="!issue.isArchived" class="flex flex-wrap gap-2 items-center">
                 <span class="text-slate-600">更換指派：</span>
                 <select @change="assignIssueWithAuth(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
                   <option disabled selected value="">選擇分派對象</option>
@@ -282,12 +295,12 @@
               <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200">
                 <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700 flex justify-between items-center">
                   <span>• <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span></span>
-                  <button @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
+                  <button v-if="!issue.isArchived" @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
                 </div>
               </div>
 
-              <!-- 填寫內部意見（點選輸入框需核驗該分派對象密碼；「記下」無任何多餘字樣） -->
-              <div class="flex gap-2 pt-1">
+              <!-- 填寫內部意見 -->
+              <div v-if="!issue.isArchived" class="flex gap-2 pt-1">
                 <input 
                   v-model="issue.tempNote" 
                   @focus="checkNoteInputAuth(issue)" 
@@ -305,13 +318,28 @@
             <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
               <div class="font-bold text-emerald-900"><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布</div>
               <textarea 
+                v-if="!issue.isArchived"
                 v-model="issue.tempFinalReply" 
                 @focus="checkFinalReplyAuth(issue)" 
                 rows="2" 
                 placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." 
                 class="w-full border rounded p-2 text-xs outline-none"></textarea>
+              <div v-else class="text-slate-700 bg-white p-2 rounded border border-slate-200 whitespace-pre-line">
+                {{ issue.finalReply || '（此案件封存無結案回覆紀錄）' }}
+              </div>
               
-              <div>
+              <div v-if="issue.replyFiles && issue.replyFiles.length > 0">
+                <div class="text-[11px] text-slate-600 mb-1">處置紀錄附件：</div>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-1">
+                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
+                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
+                    <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
+                    <button v-if="!issue.isArchived" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="!issue.isArchived" class="pt-1">
                 <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
                 <input 
                   type="file" 
@@ -321,22 +349,37 @@
                   @click="checkFileUploadAuth($event)" 
                   @change="handleAdminFileUpload(issue, $event)" 
                   class="w-full text-xs text-slate-500">
-                <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
-                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
-                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
-                    <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
-                    <button type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
-                  </div>
-                </div>
               </div>
 
               <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200">
-                <button @click="copyLineNotifyLink(issue)" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs flex items-center">
-                  <i class="fa-brands fa-line text-sm mr-1.5"></i>複製 LINE 通知連結
-                </button>
-                <div class="flex gap-2">
-                  <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs">更新進度</button>
-                  <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs">正式結案發布</button>
+                <div class="flex items-center gap-2">
+                  <button @click="copyLineNotifyLink(issue)" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center">
+                    <i class="fa-brands fa-line text-sm mr-1"></i>LINE 連結
+                  </button>
+                  <!-- 複製專屬獨立備查連結 -->
+                  <button @click="copyArchiveRecordLink(issue)" class="bg-slate-700 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded text-xs flex items-center">
+                    <i class="fa-solid fa-link text-xs mr-1"></i>複製備查專用連結
+                  </button>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                  <template v-if="!issue.isArchived">
+                    <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs">更新進度</button>
+                    <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs">正式結案發布</button>
+                    <!-- 隱藏/封存整筆案件（需主任密碼） -->
+                    <button @click="archiveIssueWithAuth(issue)" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center gap-1" title="從前台與常規看板隱藏，存入備查庫">
+                      <i class="fa-solid fa-box-archive"></i>封存隱藏
+                    </button>
+                  </template>
+                  <template v-else>
+                    <!-- 備查庫操作：還原或徹底銷毀 -->
+                    <button @click="unarchiveIssueWithAuth(issue)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-xs">
+                      <i class="fa-solid fa-rotate-left mr-1"></i>解除封存還原
+                    </button>
+                    <button @click="permanentlyDeleteIssueWithAuth(issue)" class="bg-red-700 hover:bg-red-800 text-white px-2.5 py-1.5 rounded text-xs">
+                      <i class="fa-solid fa-trash-can mr-1"></i>永久銷毀 (不可還原)
+                    </button>
+                  </template>
                 </div>
               </div>
             </div>
@@ -396,6 +439,14 @@
         </div>
 
         <div>
+          <label class="block font-medium mb-1">包含封存備查案件</label>
+          <select v-model="exportConfig.includeArchived" class="w-full border rounded px-2.5 py-1.5 bg-white outline-none">
+            <option :value="false">僅匯出有效常規案件</option>
+            <option :value="true">包含已封存備查案件</option>
+          </select>
+        </div>
+
+        <div>
           <label class="block font-medium mb-1">類別篩選</label>
           <select v-model="exportConfig.category" class="w-full border rounded px-2.5 py-1.5 bg-white outline-none">
             <option value="">全部類別</option>
@@ -433,8 +484,8 @@
 </div>
 <script>
   // 🔐 權限與密碼清單
-  const GENERAL_BACKEND_PASSWORD = '3204'; // 後台瀏覽共同密碼 (全部層級適用)
-  const DIRECTOR_PASSWORD = '8888';        // 主任 / 最高權限密碼 (記下覆核、發布結案、匯出檔案)
+  const GENERAL_BACKEND_PASSWORD = '3204'; // 後台瀏覽共同密碼
+  const DIRECTOR_PASSWORD = '8888';        // 主任 / 最高權限密碼 (記下、封存、銷毀、匯出)
 
   // 各分派對象專屬操作密碼 (點選輸入內部意見時核身)
   const ROLE_PASSWORDS = {
@@ -467,6 +518,7 @@
     data() {
       return {
         isAdmin: false,
+        showArchived: false,   // 是否正在查看「封存備查庫」
         residentTab: 'submit',
         trackKeyword: '',
         trackPassword: '',
@@ -476,7 +528,7 @@
         submitting: false,
         previewImageUrl: null, // 點擊放大相片燈箱變數
         imageScale: 1,         // 圖片縮放比例
-        unlockedNotes: {},     // 記錄已通過身分密碼驗證的案件
+        unlockedNotes: {},     // 記錄已通過密碼解鎖輸入權限的案件
         form: {
           unit: '',
           queryPassword: '',
@@ -488,6 +540,7 @@
         showExportModal: false,
         exportConfig: {
           format: 'csv',
+          includeArchived: false,
           category: '',
           startDate: '',
           endDate: ''
@@ -495,19 +548,34 @@
       };
     },
     computed: {
+      // 住戶進度查詢：已封存隱藏的案件會自動在前台隱藏
       filteredResidentIssues() {
         const kw = this.trackKeyword.trim().toLowerCase();
         const pwd = this.trackPassword.trim();
         if (!kw || !pwd) return [];
 
         return this.issues.filter(i => {
+          if (i.isArchived) return false; // 封存隱藏
           const matchCodeOrUnit = (i.id && i.id.toLowerCase().includes(kw)) || (i.unit && i.unit.toLowerCase().includes(kw));
           const matchPwd = (i.queryPassword && i.queryPassword.toString().trim() === pwd);
           return matchCodeOrUnit && matchPwd;
         });
       },
+      // 常規有效案件數量
+      activeIssuesCount() {
+        return this.issues.filter(i => !i.isArchived).length;
+      },
+      // 封存備查案件數量
+      archivedIssuesCount() {
+        return this.issues.filter(i => i.isArchived).length;
+      },
+      // 當前後台看板顯示的案件集合 (依據是否切換至備查庫)
+      currentDisplayIssues() {
+        return this.issues.filter(i => this.showArchived ? i.isArchived : !i.isArchived);
+      },
+      // 後台搜尋與篩選
       filteredAdminIssues() {
-        return this.issues.filter(i => {
+        return this.currentDisplayIssues.filter(i => {
           const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
           const matchSearch = !this.adminSearch.trim() || 
             (i.unit && i.unit.includes(this.adminSearch)) || 
@@ -516,18 +584,14 @@
           return matchCat && matchSearch;
         });
       },
+      // 匯出篩選
       matchedExportIssues() {
         return this.issues.filter(item => {
-          if (this.exportConfig.category && item.category !== this.exportConfig.category) {
-            return false;
-          }
+          if (!this.exportConfig.includeArchived && item.isArchived) return false;
+          if (this.exportConfig.category && item.category !== this.exportConfig.category) return false;
           const itemDate = item.createdAt ? item.createdAt.slice(0, 10) : '';
-          if (this.exportConfig.startDate && itemDate < this.exportConfig.startDate) {
-            return false;
-          }
-          if (this.exportConfig.endDate && itemDate > this.exportConfig.endDate) {
-            return false;
-          }
+          if (this.exportConfig.startDate && itemDate < this.exportConfig.startDate) return false;
+          if (this.exportConfig.endDate && itemDate > this.exportConfig.endDate) return false;
           return true;
         });
       },
@@ -538,17 +602,27 @@
     mounted() {
       this.fetchIssues();
 
+      // 支援網址直達查詢或專屬備查直達
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const pwd = urlParams.get('pwd');
+      const isArchivedParam = urlParams.get('archive');
+
       if (code && pwd) {
-        this.residentTab = 'track';
-        this.trackKeyword = code;
-        this.trackPassword = pwd;
+        if (isArchivedParam === '1') {
+          // 專屬備查直達連結：自動解鎖後台備查庫檢視
+          this.isAdmin = true;
+          this.showArchived = true;
+          this.adminSearch = code;
+        } else {
+          this.residentTab = 'track';
+          this.trackKeyword = code;
+          this.trackPassword = pwd;
+        }
       }
     },
     methods: {
-      // 圖片縮放與燈箱控制
+      // 圖片放大燈箱控制
       openImageModal(url) {
         this.previewImageUrl = url;
         this.imageScale = 1;
@@ -571,12 +645,13 @@
         this.imageScale = 1;
       },
 
-      // 1. 後台進入：統一為 3204
+      // 後台登入
       promptAdminLogin() {
         const input = prompt('請輸入管理後台密碼：');
         if (input === null) return;
         if (input.trim() === GENERAL_BACKEND_PASSWORD || input.trim() === DIRECTOR_PASSWORD) {
           this.isAdmin = true;
+          this.showArchived = false;
           this.fetchIssues();
         } else {
           alert('密碼錯誤！無法進入後台。');
@@ -584,6 +659,7 @@
       },
       adminLogout() {
         this.isAdmin = false;
+        this.showArchived = false;
         this.unlockedNotes = {};
       },
       clearTrackInput() {
@@ -591,7 +667,93 @@
         this.trackPassword = '';
       },
 
-      // 2. 匯出備份限制：只能由最高權限或主任 (8888) 執行
+      // 切換「封存備查庫」檢視（需主任密碼）
+      toggleArchiveView() {
+        if (!this.showArchived) {
+          const pwd = prompt('進入封存備查庫需主任授權，請輸入主任密碼：');
+          if (pwd === DIRECTOR_PASSWORD) {
+            this.showArchived = true;
+          } else {
+            alert('密碼錯誤！無法進入備查庫。');
+          }
+        } else {
+          this.showArchived = false;
+        }
+      },
+
+      // 封存並隱藏整筆反映案件（需主任密碼）
+      async archiveIssueWithAuth(issue) {
+        const confirmAction = confirm(`確定要將案件【${issue.id} - ${issue.unit}】從前台與常規看板隱藏，移入封存備查庫嗎？`);
+        if (!confirmAction) return;
+
+        const pwd = prompt('請輸入主任密碼以執行案件封存：');
+        if (pwd !== DIRECTOR_PASSWORD) {
+          alert('主任密碼錯誤！無法封存。');
+          return;
+        }
+
+        issue.isArchived = true;
+        await this.syncUpdate(issue);
+        alert(`案件【${issue.id}】已成功封存隱藏！\n資料已安全轉入「封存備查庫」，住戶前台已不再顯示。`);
+      },
+
+      // 解除封存並還原（需主任密碼）
+      async unarchiveIssueWithAuth(issue) {
+        const pwd = prompt('請輸入主任密碼以解除封存還原案件：');
+        if (pwd !== DIRECTOR_PASSWORD) {
+          alert('主任密碼錯誤！無法還原。');
+          return;
+        }
+
+        issue.isArchived = false;
+        await this.syncUpdate(issue);
+        alert(`案件【${issue.id}】已成功還原至常規看板！`);
+      },
+
+      // 永久徹底刪除整筆資料（不可復原，需主任密碼雙重確認）
+      async permanentlyDeleteIssueWithAuth(issue) {
+        const doubleCheck = prompt(`⚠️ 危險操作！此動作將永久銷毀案件【${issue.id}】之所有說明與附件，無法還原！\n請輸入大寫「DELETE」以確認刪除：`);
+        if (doubleCheck !== 'DELETE') {
+          alert('輸入不符，已取消永久刪除操作。');
+          return;
+        }
+
+        const pwd = prompt('最後一步：請輸入主任最高密碼以確認永久銷毀：');
+        if (pwd !== DIRECTOR_PASSWORD) {
+          alert('密碼驗證失敗！無法刪除。');
+          return;
+        }
+
+        try {
+          if (supabaseClient) {
+            const { error } = await supabaseClient.from('issues').delete().eq('id', issue.id);
+            if (error) throw error;
+          }
+          this.issues = this.issues.filter(i => i.id !== issue.id);
+          alert(`案件【${issue.id}】已從雲端資料庫徹底銷毀！`);
+        } catch (err) {
+          alert('銷毀失敗：' + (err.message || String(err)));
+        }
+      },
+
+      // 複製專屬獨立備查直達連結 (方便管委會另存於 Excel 或雲端文件備查)
+      copyArchiveRecordLink(issue) {
+        const baseUrl = window.location.origin + window.location.pathname;
+        const recordUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&pwd=${encodeURIComponent(issue.queryPassword)}&archive=1`;
+        const memoText = `【最上境社區案件封存備查資料】\n案件編號：${issue.id}\n反映戶號：${issue.unit}\n類別：${issue.category}\n反映內容：${issue.description}\n管委會結論：${issue.finalReply || '無'}\n\n管委會專屬備查直達連結（點開直接檢閱完整歷程）：\n${recordUrl}`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(memoText).then(() => {
+            alert('已成功複製備查資料與專屬直達連結！\n可直接貼入管委會工作紀錄或會議日誌備查。');
+          }).catch(() => {
+            prompt('請手動複製以下備查內容：', memoText);
+          });
+        } else {
+          prompt('請手動複製以下備查內容：', memoText);
+        }
+      },
+
+      // 匯出備份（需主任密碼）
       openExportModalWithAuth() {
         const pwd = prompt('自訂匯出功能僅限主任與最高權限使用，請輸入主任密碼：');
         if (pwd === null) return;
@@ -602,7 +764,7 @@
         }
       },
 
-      // 3. 點選輸入「內部意見」時：必須配對該分派對象專屬密碼
+      // 點選輸入「內部意見」時：必須配對該分派對象專屬密碼
       checkNoteInputAuth(issue) {
         if (this.unlockedNotes[issue.id]) return;
 
@@ -618,7 +780,7 @@
         }
       },
 
-      // 4. 點選輸入「主任結案說明」時：必須配對主任密碼 (8888)
+      // 點選輸入「主任結案說明」時：必須配對主任密碼
       checkFinalReplyAuth(issue) {
         if (issue._replyUnlocked) return;
         const input = prompt('統整處置說明需由主任親自填寫，請輸入主任密碼：');
@@ -630,7 +792,7 @@
         }
       },
 
-      // 5. 點選「上傳處置附件」時：必須配對主任密碼 (8888)
+      // 點選「上傳處置附件」時：必須配對主任密碼
       checkFileUploadAuth(e) {
         const input = prompt('上傳處置附件需由主任授權，請輸入主任密碼：');
         if (input === null || input.trim() !== DIRECTOR_PASSWORD) {
@@ -639,7 +801,7 @@
         }
       },
 
-      // 6. 點選「記下」：必須輸入主任密碼 (8888) 覆核後才能保存
+      // 點選「記下」：必須輸入主任密碼 (8888) 覆核後保存
       addInternalNoteWithDirector(issue) {
         if (!issue.tempNote?.trim()) {
           alert('請先輸入意見內容！');
@@ -667,7 +829,6 @@
         }
       },
 
-      // 刪除內部意見（需主任密碼）
       deleteInternalNoteWithAuth(issue, idx) {
         const inputPwd = prompt('刪除內部協處紀錄需主任授權，請輸入主任密碼：');
         if (inputPwd === null) return;
@@ -680,7 +841,6 @@
         }
       },
 
-      // 更換指派對象（需主任密碼）
       assignIssueWithAuth(issue, role) {
         const pwd = prompt('更換案件分派對象需主任核准，請輸入主任密碼：');
         if (pwd === null || pwd.trim() !== DIRECTOR_PASSWORD) {
@@ -694,7 +854,6 @@
         alert(`已成功分派至【${role}】！`);
       },
 
-      // 刪除主任回覆附件（需主任密碼）
       deleteAdminReplyFile(issue, pIdx) {
         const pwd = prompt('請輸入主任密碼以確認刪除附件：');
         if (pwd === DIRECTOR_PASSWORD) {
@@ -805,6 +964,7 @@
           if (!error && Array.isArray(data)) {
             this.issues = data.map(item => ({
               ...item,
+              isArchived: item.isArchived || false,
               tempNote: '',
               tempFinalReply: item.finalReply || ''
             }));
@@ -841,7 +1001,8 @@
             internalNotes: [],
             finalReply: '',
             repliedAt: '',
-            replyFiles: []
+            replyFiles: [],
+            isArchived: false
           };
 
           if (supabaseClient) {
@@ -880,7 +1041,8 @@
             internalNotes: issue.internalNotes,
             finalReply: issue.finalReply,
             repliedAt: issue.repliedAt,
-            replyFiles: issue.replyFiles
+            replyFiles: issue.replyFiles,
+            isArchived: issue.isArchived || false
           })
           .eq('id', issue.id);
 
@@ -890,7 +1052,6 @@
         }
       },
 
-      // 發布進度或正式結案（需主任密碼）
       async publishToResident(issue, status) {
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
@@ -953,14 +1114,14 @@
         const dateTag = new Date().toISOString().slice(0, 10);
 
         if (this.exportConfig.format === 'csv') {
-          const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間'];
+          const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '是否已封存'];
           const csvRows = targetList.map(item => {
             const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
             const notesText = (item.internalNotes || []).map(n => `[${n.role}] ${n.comment} (${n.time})`).join('；');
             return [
               esc(item.id), esc(item.unit), esc(item.queryPassword), esc(item.category),
               esc(item.description), esc(item.createdAt), esc(item.status), esc(item.assignedTo),
-              esc(notesText), esc(item.finalReply), esc(item.repliedAt)
+              esc(notesText), esc(item.finalReply), esc(item.repliedAt), esc(item.isArchived ? '已封存' : '正常')
             ].join(',');
           });
 
@@ -976,7 +1137,7 @@
           const cardsHtml = targetList.map(item => `
             <div style="border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;font-family:sans-serif;">
               <div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px;">
-                <span style="font-weight:bold;color:#065f46;">${item.id} | ${item.unit} (${item.category})</span>
+                <span style="font-weight:bold;color:#065f46;">${item.id} | ${item.unit} (${item.category})${item.isArchived ? ' [已封存備查]' : ''}</span>
                 <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:bold;">${item.status}</span>
               </div>
               <p style="color:#334155;margin:8px 0;line-height:1.5;"><strong>反映說明：</strong>${item.description}</p>
@@ -1022,7 +1183,7 @@
       },
 
       countStatus(st) {
-        return this.issues.filter(i => i.status === st).length;
+        return this.currentDisplayIssues.filter(i => i.status === st).length;
       },
 
       getStatusBadgeClass(status) {

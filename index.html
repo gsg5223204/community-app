@@ -1053,7 +1053,24 @@
           }
 
           this.issues.unshift(newIssue);
+// 📲 即時手機 App 原生橫幅推播（ntfy）
+          try {
+            const notifyTopic = 'zuishangjing-alerts-2026'; // 務必與主任手機訂閱的主題名稱一致
+            const currentUrl = window.location.origin + window.location.pathname;
 
+            fetch(`https://ntfy.sh/${notifyTopic}`, {
+              method: 'POST',
+              body: `戶號：${newIssue.unit}\n類別：${newIssue.category}\n內容：${newIssue.description}`,
+              headers: {
+                'Title': '最上境社區 - 新反映通報',
+                'Priority': 'urgent',      // 最高優先度：彈窗、震動、響鈴
+                'Tags': 'bell,warning',     // 提示圖示
+                'Click': currentUrl        // 點擊通知直接開啟系統首頁
+              }
+            }).catch(e => console.warn('推播略過：', e));
+          } catch (e) {
+            console.warn('推播例外略過：', e);
+          }
           alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n資料已即時同步至雲端。`);
           
           this.trackKeyword = caseId;

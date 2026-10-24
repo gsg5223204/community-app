@@ -517,6 +517,9 @@
   const DIRECTOR_PASSWORD = '8888';        // 主任最高權限密碼
   const DIRECTOR_ROLE_PASSWORD = '1001';   // 主任分派身分密碼 (輸入 1001 或 8888 均視為主任本人)
 
+  // 🔔 ntfy 推播頻道名稱 (請與手機 ntfy App 訂閱之主題名稱保持一致)
+  const NTFY_TOPIC = 'zuishangjing-alerts-2026';
+
   // 輔助函式：判斷是否為主任本人 (支援 8888 與 1001 雙密碼相容)
   function isDirectorAuth(pwd) {
     if (!pwd) return false;
@@ -814,7 +817,6 @@
         }
 
         const clean = input.trim();
-        // 若分派為主任，1001 或 8888 皆可；若分派為其他委員，其專屬密碼或 8888/1001 亦可
         const isMatch = (clean === expectedPwd) || isDirectorAuth(clean);
 
         if (!isMatch) {
@@ -1053,25 +1055,29 @@
           }
 
           this.issues.unshift(newIssue);
-// 📲 即時手機 App 原生橫幅推播（ntfy）
-          try {
-            const notifyTopic = 'zuishangjing-alerts-2026'; // 務必與主任手機訂閱的主題名稱一致
-            const currentUrl = window.location.origin + window.location.pathname;
 
-            fetch(`https://ntfy.sh/${notifyTopic}`, {
+          // 📲 即時手機 App 原生橫幅推播（標準 JSON 格式，完整支援繁體中文）
+          try {
+            const currentUrl = window.location.href;
+            fetch('https://ntfy.sh', {
               method: 'POST',
-              body: `戶號：${newIssue.unit}\n類別：${newIssue.category}\n內容：${newIssue.description}`,
               headers: {
-                'Title': '最上境社區 - 新反映通報',
-                'Priority': 'urgent',      // 最高優先度：彈窗、震動、響鈴
-                'Tags': 'bell,warning',     // 提示圖示
-                'Click': currentUrl        // 點擊通知直接開啟系統首頁
-              }
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                topic: NTFY_TOPIC,
+                title: '最上境社區 - 新反映通報',
+                message: `戶號：${newIssue.unit}\n類別：${newIssue.category}\n內容：${newIssue.description}`,
+                priority: 5,
+                tags: ['bell', 'warning'],
+                click: currentUrl
+              })
             }).catch(e => console.warn('推播略過：', e));
           } catch (e) {
             console.warn('推播例外略過：', e);
           }
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n資料已即時同步至雲端。`);
+
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n資料已即時同步至雲端，並已發送推播通知主任。`);
           
           this.trackKeyword = caseId;
           this.trackPassword = this.form.queryPassword.trim();

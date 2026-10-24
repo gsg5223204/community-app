@@ -37,7 +37,7 @@
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
         <button v-else @click="adminLogout" class="text-xs bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white">
-          <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台 ({{ adminRoleName }})
+          <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台
         </button>
       </div>
     </div>
@@ -180,16 +180,14 @@
 
     <!-- 管理後台 -->
     <div v-if="isAdmin" class="space-y-6">
-      <!-- 權限提示橫幅 -->
-      <div class="p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2" :class="isReadOnlyAdmin ? 'bg-amber-50 border border-amber-300 text-amber-900' : 'bg-emerald-50 border border-emerald-200 text-emerald-800'">
-        <div class="flex items-center gap-1.5 font-bold">
-          <i :class="isReadOnlyAdmin ? 'fa-solid fa-eye text-amber-600' : 'fa-solid fa-shield-halved text-emerald-700'"></i>
-          <span>身分：{{ adminRoleName }}</span>
-          <span v-if="isReadOnlyAdmin" class="bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[11px]">唯讀監看模式 (無法修改資料)</span>
-          <span v-else class="bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded text-[11px]">具備異動權限</span>
+      <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
+        <div class="flex items-center gap-1.5 font-bold text-emerald-900">
+          <i class="fa-solid fa-shield-halved text-emerald-700"></i>
+          <span>後台管理模式 (雲端連線共 {{ issues.length }} 筆)</span>
         </div>
-        <button @click="showExportModal = true" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow">
-          <i class="fa-solid fa-file-export mr-1"></i>自訂篩選匯出
+        <!-- 匯出按鈕（需主任/最高密碼 8888 才能點開） -->
+        <button @click="openExportModalWithAuth" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1">
+          <i class="fa-solid fa-file-export"></i>自訂篩選匯出 (主任專用)
         </button>
       </div>
 
@@ -264,10 +262,10 @@
                 <span class="text-[11px] text-amber-700">目前分派至：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
               </div>
 
-              <!-- 指派選項（僅限非唯讀者操作） -->
-              <div v-if="!isReadOnlyAdmin" class="flex flex-wrap gap-2 items-center">
+              <!-- 指派選項（需主任密碼） -->
+              <div class="flex flex-wrap gap-2 items-center">
                 <span class="text-slate-600">更換指派：</span>
-                <select @change="assignIssue(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
+                <select @change="assignIssueWithAuth(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
                   <option disabled selected value="">選擇分派對象</option>
                   <option value="總幹事/主任">總幹事/主任</option>
                   <option value="主任委員意見">主任委員意見</option>
@@ -284,52 +282,61 @@
               <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200">
                 <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700 flex justify-between items-center">
                   <span>• <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span></span>
-                  <!-- 刪除協處紀錄（需驗證密碼） -->
-                  <button v-if="!isReadOnlyAdmin" @click="deleteInternalNote(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
+                  <button @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
                 </div>
               </div>
 
-              <!-- 填寫內部意見（唯讀者隱藏） -->
-              <div v-if="!isReadOnlyAdmin" class="flex gap-2 pt-1">
-                <input v-model="issue.tempNote" placeholder="被分派之委員內部意見..." class="flex-1 border rounded px-2 py-1 text-xs outline-none">
-                <button @click="addInternalNote(issue)" class="bg-amber-600 text-white px-2.5 py-1 rounded text-xs hover:bg-amber-700">記下 (需密碼)</button>
+              <!-- 填寫內部意見（點選輸入框需核驗該分派對象密碼；「記下」無任何多餘字樣） -->
+              <div class="flex gap-2 pt-1">
+                <input 
+                  v-model="issue.tempNote" 
+                  @focus="checkNoteInputAuth(issue)" 
+                  placeholder="被分派人員填寫意見..." 
+                  class="flex-1 border rounded px-2 py-1 text-xs outline-none">
+                <button 
+                  @click="addInternalNoteWithDirector(issue)" 
+                  class="bg-amber-600 text-white px-3 py-1 rounded text-xs hover:bg-amber-700 font-medium">
+                  記下
+                </button>
               </div>
             </div>
 
-            <!-- 主任回覆（唯讀者僅可查看內容，隱藏編輯與發布） -->
+            <!-- 主任回覆 -->
             <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
               <div class="font-bold text-emerald-900"><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布</div>
+              <textarea 
+                v-model="issue.tempFinalReply" 
+                @focus="checkFinalReplyAuth(issue)" 
+                rows="2" 
+                placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." 
+                class="w-full border rounded p-2 text-xs outline-none"></textarea>
               
-              <div v-if="isReadOnlyAdmin">
-                <div class="bg-white p-2.5 rounded border border-slate-200 text-slate-700 whitespace-pre-line">
-                  {{ issue.finalReply || '（目前尚無公開處置說明）' }}
-                </div>
-              </div>
-              <textarea v-else v-model="issue.tempFinalReply" rows="2" placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." class="w-full border rounded p-2 text-xs outline-none"></textarea>
-              
-              <div v-if="issue.replyFiles && issue.replyFiles.length > 0">
-                <div class="text-[11px] text-slate-600 mb-1">處置紀錄附件：</div>
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div>
+                <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*,video/*" 
+                  :disabled="(issue.replyFiles?.length || 0) >= 5" 
+                  @click="checkFileUploadAuth($event)" 
+                  @change="handleAdminFileUpload(issue, $event)" 
+                  class="w-full text-xs text-slate-500">
+                <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
                   <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
                     <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
                     <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
-                    <button v-if="!isReadOnlyAdmin" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
+                    <button type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
-              </div>
-
-              <div v-if="!isReadOnlyAdmin" class="pt-1">
-                <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
-                <input type="file" multiple accept="image/*,video/*" :disabled="(issue.replyFiles?.length || 0) >= 5" @change="handleAdminFileUpload(issue, $event)" class="w-full text-xs text-slate-500">
               </div>
 
               <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200">
                 <button @click="copyLineNotifyLink(issue)" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs flex items-center">
                   <i class="fa-brands fa-line text-sm mr-1.5"></i>複製 LINE 通知連結
                 </button>
-                <div v-if="!isReadOnlyAdmin" class="flex gap-2">
+                <div class="flex gap-2">
                   <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded text-xs">更新進度</button>
-                  <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs">正式結案發布 (需密碼)</button>
+                  <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs">正式結案發布</button>
                 </div>
               </div>
             </div>
@@ -339,7 +346,7 @@
     </div>
   </main>
 
-  <!-- 升級版圖片放大燈箱 (支援自由放大、縮小、還原) -->
+  <!-- 圖片放大燈箱 -->
   <div v-if="previewImageUrl" class="fixed inset-0 bg-black/95 z-[100] flex flex-col justify-between items-center p-2 select-none">
     <div class="w-full max-w-4xl flex justify-between items-center p-2 text-white">
       <div class="flex items-center space-x-3 text-sm">
@@ -371,7 +378,7 @@
   <div v-if="showExportModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4 text-xs">
       <div class="flex justify-between items-center border-b pb-3 text-sm font-bold">
-        <span><i class="fa-solid fa-file-export text-emerald-600 mr-2"></i>匯出案件備份資料</span>
+        <span><i class="fa-solid fa-file-export text-emerald-600 mr-2"></i>匯出案件備份資料 (主任最高權限)</span>
         <button @click="showExportModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
       </div>
 
@@ -426,10 +433,10 @@
 </div>
 <script>
   // 🔐 權限與密碼清單
-  const MASTER_ADMIN_PASSWORD = '8888'; // 總管理者（全權限）
-  const READONLY_ADMIN_PASSWORD = '3204'; // 唯讀監看者（只能看、不能改）
+  const GENERAL_BACKEND_PASSWORD = '3204'; // 後台瀏覽共同密碼 (全部層級適用)
+  const DIRECTOR_PASSWORD = '8888';        // 主任 / 最高權限密碼 (記下覆核、發布結案、匯出檔案)
 
-  // 各分派職案專屬操作密碼（用於新增/刪除紀錄時核身）
+  // 各分派對象專屬操作密碼 (點選輸入內部意見時核身)
   const ROLE_PASSWORDS = {
     '總幹事/主任': '1001',
     '主任委員意見': '1002',
@@ -460,8 +467,6 @@
     data() {
       return {
         isAdmin: false,
-        isReadOnlyAdmin: false, // 是否為唯讀模式 (3204)
-        adminRoleName: '',      // 當前後台身分標籤
         residentTab: 'submit',
         trackKeyword: '',
         trackPassword: '',
@@ -469,8 +474,9 @@
         adminFilterCategory: '',
         loading: false,
         submitting: false,
-        previewImageUrl: null,  // 點擊放大相片燈箱變數
-        imageScale: 1,          // 圖片縮放比例
+        previewImageUrl: null, // 點擊放大相片燈箱變數
+        imageScale: 1,         // 圖片縮放比例
+        unlockedNotes: {},     // 記錄已通過身分密碼驗證的案件
         form: {
           unit: '',
           queryPassword: '',
@@ -565,22 +571,12 @@
         this.imageScale = 1;
       },
 
-      // 後台登入分流：8888 (管理員)、3204 (唯讀監看)
+      // 1. 後台進入：統一為 3204
       promptAdminLogin() {
         const input = prompt('請輸入管理後台密碼：');
         if (input === null) return;
-        const trimmed = input.trim();
-
-        if (trimmed === READONLY_ADMIN_PASSWORD) {
+        if (input.trim() === GENERAL_BACKEND_PASSWORD || input.trim() === DIRECTOR_PASSWORD) {
           this.isAdmin = true;
-          this.isReadOnlyAdmin = true;
-          this.adminRoleName = '監看訪客 (唯讀模式)';
-          this.fetchIssues();
-          alert('已進入【唯讀監看模式】。\n您可以瀏覽所有案件進度與匯出報表，但無法異動或刪除任何資料。');
-        } else if (trimmed === MASTER_ADMIN_PASSWORD) {
-          this.isAdmin = true;
-          this.isReadOnlyAdmin = false;
-          this.adminRoleName = '總管理者 (主任/管委會)';
           this.fetchIssues();
         } else {
           alert('密碼錯誤！無法進入後台。');
@@ -588,12 +584,125 @@
       },
       adminLogout() {
         this.isAdmin = false;
-        this.isReadOnlyAdmin = false;
-        this.adminRoleName = '';
+        this.unlockedNotes = {};
       },
       clearTrackInput() {
         this.trackKeyword = '';
         this.trackPassword = '';
+      },
+
+      // 2. 匯出備份限制：只能由最高權限或主任 (8888) 執行
+      openExportModalWithAuth() {
+        const pwd = prompt('自訂匯出功能僅限主任與最高權限使用，請輸入主任密碼：');
+        if (pwd === null) return;
+        if (pwd.trim() === DIRECTOR_PASSWORD) {
+          this.showExportModal = true;
+        } else {
+          alert('密碼驗證失敗！無權限使用匯出功能。');
+        }
+      },
+
+      // 3. 點選輸入「內部意見」時：必須配對該分派對象專屬密碼
+      checkNoteInputAuth(issue) {
+        if (this.unlockedNotes[issue.id]) return;
+
+        const targetRole = issue.assignedTo || '總幹事/主任';
+        const expectedPwd = ROLE_PASSWORDS[targetRole] || DIRECTOR_PASSWORD;
+
+        const input = prompt(`此案件目前分派至【${targetRole}】。\n請輸入該分派對象專屬密碼以取得輸入資格：`);
+        if (input === null || (input.trim() !== expectedPwd && input.trim() !== DIRECTOR_PASSWORD)) {
+          alert(`密碼驗證錯誤！非【${targetRole}】本人無權輸入資料。`);
+          document.activeElement.blur();
+        } else {
+          this.unlockedNotes[issue.id] = true;
+        }
+      },
+
+      // 4. 點選輸入「主任結案說明」時：必須配對主任密碼 (8888)
+      checkFinalReplyAuth(issue) {
+        if (issue._replyUnlocked) return;
+        const input = prompt('統整處置說明需由主任親自填寫，請輸入主任密碼：');
+        if (input === null || input.trim() !== DIRECTOR_PASSWORD) {
+          alert('密碼驗證錯誤！僅限主任有權編輯公開說明。');
+          document.activeElement.blur();
+        } else {
+          issue._replyUnlocked = true;
+        }
+      },
+
+      // 5. 點選「上傳處置附件」時：必須配對主任密碼 (8888)
+      checkFileUploadAuth(e) {
+        const input = prompt('上傳處置附件需由主任授權，請輸入主任密碼：');
+        if (input === null || input.trim() !== DIRECTOR_PASSWORD) {
+          alert('密碼驗證錯誤！無法上傳附件。');
+          e.preventDefault();
+        }
+      },
+
+      // 6. 點選「記下」：必須輸入主任密碼 (8888) 覆核後才能保存
+      addInternalNoteWithDirector(issue) {
+        if (!issue.tempNote?.trim()) {
+          alert('請先輸入意見內容！');
+          return;
+        }
+
+        const inputPwd = prompt('【主任覆核】存檔請輸入主任密碼：');
+        if (inputPwd === null) return;
+
+        if (inputPwd.trim() === DIRECTOR_PASSWORD) {
+          const now = new Date();
+          const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+          if (!issue.internalNotes) issue.internalNotes = [];
+          
+          issue.internalNotes.push({
+            role: issue.assignedTo || '總幹事/主任',
+            comment: issue.tempNote.trim(),
+            time: timeStr
+          });
+          issue.tempNote = '';
+          this.syncUpdate(issue);
+          alert('主任已確認覆核，意見已成功記下並保存！');
+        } else {
+          alert('主任密碼驗證錯誤！無法儲存該筆資料。');
+        }
+      },
+
+      // 刪除內部意見（需主任密碼）
+      deleteInternalNoteWithAuth(issue, idx) {
+        const inputPwd = prompt('刪除內部協處紀錄需主任授權，請輸入主任密碼：');
+        if (inputPwd === null) return;
+        if (inputPwd.trim() === DIRECTOR_PASSWORD) {
+          issue.internalNotes.splice(idx, 1);
+          this.syncUpdate(issue);
+          alert('紀錄已刪除！');
+        } else {
+          alert('密碼驗證錯誤！無法刪除。');
+        }
+      },
+
+      // 更換指派對象（需主任密碼）
+      assignIssueWithAuth(issue, role) {
+        const pwd = prompt('更換案件分派對象需主任核准，請輸入主任密碼：');
+        if (pwd === null || pwd.trim() !== DIRECTOR_PASSWORD) {
+          alert('密碼錯誤！無法變更指派對象。');
+          return;
+        }
+        issue.assignedTo = role;
+        issue.status = role.includes('委員') ? '管委會研議' : '處理中';
+        delete this.unlockedNotes[issue.id];
+        this.syncUpdate(issue);
+        alert(`已成功分派至【${role}】！`);
+      },
+
+      // 刪除主任回覆附件（需主任密碼）
+      deleteAdminReplyFile(issue, pIdx) {
+        const pwd = prompt('請輸入主任密碼以確認刪除附件：');
+        if (pwd === DIRECTOR_PASSWORD) {
+          issue.replyFiles.splice(pIdx, 1);
+          this.syncUpdate(issue);
+        } else {
+          alert('密碼錯誤！無法刪除附件。');
+        }
       },
 
       // 住戶端上傳直傳 Storage
@@ -639,11 +748,6 @@
 
       // 主任後台附件直傳 Storage
       async handleAdminFileUpload(issue, e) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法上傳處置附件！');
-          return;
-        }
-
         if (!issue.replyFiles) issue.replyFiles = [];
         const files = Array.from(e.target.files);
         if (issue.replyFiles.length + files.length > 5) {
@@ -687,20 +791,6 @@
           }
         }
         this.syncUpdate(issue);
-      },
-
-      deleteAdminReplyFile(issue, pIdx) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法刪除附件！');
-          return;
-        }
-        const pwd = prompt('請輸入管理者密碼以確認刪除附件：');
-        if (pwd === MASTER_ADMIN_PASSWORD) {
-          issue.replyFiles.splice(pIdx, 1);
-          this.syncUpdate(issue);
-        } else {
-          alert('密碼錯誤！無法刪除附件。');
-        }
       },
 
       async fetchIssues() {
@@ -800,87 +890,17 @@
         }
       },
 
-      assignIssue(issue, role) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法變更分派對象！');
-          return;
-        }
-        issue.assignedTo = role;
-        issue.status = role.includes('委員') ? '管委會研議' : '處理中';
-        this.syncUpdate(issue);
-      },
-
-      // 新增委員內部協處意見（需驗證該職位專屬密碼或管理者密碼）
-      addInternalNote(issue) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法新增內部意見！');
-          return;
-        }
-        if (!issue.tempNote?.trim()) {
-          alert('請輸入意見內容！');
-          return;
-        }
-
-        const currentRole = issue.assignedTo || '總幹事/主任';
-        const requiredPwd = ROLE_PASSWORDS[currentRole] || MASTER_ADMIN_PASSWORD;
-
-        const inputPwd = prompt(`請輸入【${currentRole}】的操作授權密碼：`);
-        if (inputPwd === null) return;
-
-        if (inputPwd.trim() === requiredPwd || inputPwd.trim() === MASTER_ADMIN_PASSWORD) {
-          const now = new Date();
-          const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-          if (!issue.internalNotes) issue.internalNotes = [];
-          
-          issue.internalNotes.push({
-            role: currentRole,
-            comment: issue.tempNote.trim(),
-            time: timeStr
-          });
-          issue.tempNote = '';
-          this.syncUpdate(issue);
-          alert('已成功記下內部意見！');
-        } else {
-          alert(`密碼驗證失敗！您無權限以【${currentRole}】身分新增紀錄。`);
-        }
-      },
-
-      // 刪除內部意見（需驗證密碼）
-      deleteInternalNote(issue, idx) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法刪除紀錄！');
-          return;
-        }
-        const note = issue.internalNotes[idx];
-        const requiredPwd = ROLE_PASSWORDS[note.role] || MASTER_ADMIN_PASSWORD;
-
-        const inputPwd = prompt(`請輸入【${note.role}】或總管理者密碼以確認刪除：`);
-        if (inputPwd === null) return;
-
-        if (inputPwd.trim() === requiredPwd || inputPwd.trim() === MASTER_ADMIN_PASSWORD) {
-          issue.internalNotes.splice(idx, 1);
-          this.syncUpdate(issue);
-          alert('已成功刪除該筆意見紀錄！');
-        } else {
-          alert('密碼驗證失敗！無法刪除紀錄。');
-        }
-      },
-
-      // 主任發布回覆（需驗證管理者密碼）
+      // 發布進度或正式結案（需主任密碼）
       async publishToResident(issue, status) {
-        if (this.isReadOnlyAdmin) {
-          alert('唯讀模式下無法發布處置回覆！');
-          return;
-        }
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
         }
 
-        const inputPwd = prompt('請輸入總管理者密碼 (主任) 以執行發布：');
+        const inputPwd = prompt('請輸入主任密碼以發布處置結論：');
         if (inputPwd === null) return;
-        if (inputPwd.trim() !== MASTER_ADMIN_PASSWORD) {
-          alert('管理者密碼錯誤！無法發布。');
+        if (inputPwd.trim() !== DIRECTOR_PASSWORD) {
+          alert('主任密碼錯誤！無法發布。');
           return;
         }
 
@@ -921,10 +941,6 @@
         } else {
           prompt('請手動複製以下訊息傳給住戶：', lineMessage);
         }
-      },
-
-      openExportModal() {
-        this.showExportModal = true;
       },
 
       executeExport() {

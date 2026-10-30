@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
   <title>最上境社區 - 住戶線上共好反映系統</title>
   
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://tailwindcss.com"></script>
+  <script src="https://unpkg.com"></script>
+  <script src="https://jsdelivr.net"></script>
+  <link rel="stylesheet" href="https://cloudflare.com">
   
   <style>
     [v-cloak] { display: none; }
@@ -127,7 +127,7 @@
           </div>
         </div>
 
-        <!-- 補全截斷的內容 -->
+        <!-- 修正並補全先前截斷的區塊 -->
         <div v-if="!trackKeyword.trim() || !trackPassword.trim()" class="text-center text-sm text-slate-500 p-8 bg-white rounded-lg border border-slate-200 shadow-sm">
           <i class="fa-solid fa-keyboard text-2xl text-slate-300 mb-2 block"></i>
           請輸入「案件代碼或戶號」與「查詢密碼」進行安全核驗
@@ -149,7 +149,7 @@
             </div>
           </div>
           <div v-if="filteredIssues.length === 0" class="text-center text-sm text-slate-500 p-8 bg-white rounded-lg border border-slate-200">
-            無符合該查驗條件的案件，請確認輸入資訊。
+            無符合該查驗條件的案件，請確認輸入資訊是否正確。
           </div>
         </div>
       </div>

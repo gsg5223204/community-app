@@ -33,7 +33,7 @@
         <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
-        <button v-if="!isAdmin" @click="promptAdminLogin" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
+       <button v-if="!isAdmin" @click="promptAdminLogin()" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
         <button v-else @click="adminLogout" class="text-xs bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white">

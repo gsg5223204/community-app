@@ -30,14 +30,14 @@
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <button @click="fetchIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
+        <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
         <button v-if="!isAdmin" @click="promptAdminLogin" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
         <button v-else @click="adminLogout" class="text-xs bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white">
-          <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台
+          <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台 ({{ currentRoleName }})
         </button>
       </div>
     </div>
@@ -46,7 +46,7 @@
   <!-- 主內容區 -->
   <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
     <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在同步雲端資料庫...
+      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在安全連線雲端資料庫...
     </div>
 
     <!-- 住戶前台 -->
@@ -70,8 +70,8 @@
               <input v-model="form.unit" required type="text" placeholder="例：A1-10" class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">自訂查詢密碼 * (必填)</label>
-              <input v-model="form.queryPassword" required type="text" placeholder="查詢案件時核身用" class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+              <label class="block text-sm font-medium text-slate-700 mb-1">手機末 4 碼 * (查詢核身用)</label>
+              <input v-model="form.queryPassword" required type="tel" maxlength="4" pattern="\d{4}" placeholder="請輸入 4 位數字，例：5678" class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
           </div>
 
@@ -114,28 +114,32 @@
         </form>
       </div>
 
-      <!-- 進度查詢 -->
+      <!-- 進度查詢 (單筆雲端安全驗證) -->
       <div v-if="residentTab === 'track'" class="space-y-4">
-        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
+        <form @submit.prevent="searchResidentIssue" class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
           <div class="font-bold text-sm text-slate-800"><i class="fa-solid fa-user-lock text-emerald-600 mr-2"></i>案件進度雙重核驗查詢</div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input v-model="trackKeyword" type="text" placeholder="案件代碼 或 戶號 *" class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm outline-none">
-            <input v-model="trackPassword" type="password" placeholder="查詢密碼 *" class="w-full border border-slate-300 rounded px-3 py-1.5 text-sm outline-none">
+            <input v-model="trackKeyword" type="text" required placeholder="案件代碼 或 樓層戶號 *" class="w-full border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+            <input v-model="trackPassword" type="password" inputmode="numeric" maxlength="4" autocomplete="off" required placeholder="手機末 4 碼 *" class="w-full border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
-          <div class="flex justify-end">
-            <button @click="clearTrackInput" class="text-xs text-slate-500 hover:text-slate-700">清空條件</button>
+          <div class="flex justify-between items-center pt-1">
+            <button type="button" @click="clearTrackInput" class="text-xs text-slate-500 hover:text-slate-700">清空條件</button>
+            <button type="submit" :disabled="loading || trackCooldown > 0" class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold px-5 py-2 rounded text-sm shadow transition">
+              <i class="fa-solid fa-magnifying-glass mr-1"></i>
+              {{ trackCooldown > 0 ? `請稍候 (${trackCooldown}秒)` : '驗證並查詢' }}
+            </button>
           </div>
+        </form>
+
+        <div v-if="!hasSearched" class="text-center py-10 bg-white rounded-lg border text-slate-400 text-sm">
+          請輸入「案件代碼（或樓層戶號）」及「手機末 4 碼」，點擊「驗證並查詢」。
         </div>
 
-        <div v-if="!trackKeyword.trim() || !trackPassword.trim()" class="text-center py-10 bg-white rounded-lg border text-slate-400 text-sm">
-          請同時輸入「案件代碼/戶號」及「查詢密碼」進行驗證。
+        <div v-else-if="residentResults.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border text-amber-600 text-sm">
+          查無符合案件，或手機末 4 碼輸入錯誤！（若已封存結案請洽管理室）
         </div>
 
-        <div v-else-if="filteredResidentIssues.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border text-amber-600 text-sm">
-          查無符合案件，或查詢密碼輸入錯誤！
-        </div>
-
-        <div v-for="issue in filteredResidentIssues" :key="issue.id" class="bg-white rounded-lg p-5 shadow-sm border border-slate-200">
+        <div v-for="issue in residentResults" :key="issue.id" class="bg-white rounded-lg p-5 shadow-sm border border-slate-200">
           <div class="flex justify-between items-start mb-2">
             <div>
               <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mr-2 font-mono">{{ issue.id }}</span>
@@ -183,14 +187,12 @@
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
         <div class="flex items-center gap-1.5 font-bold text-emerald-900">
           <i class="fa-solid fa-shield-halved text-emerald-700"></i>
-          <span>後台管理模式 (有效案件 {{ activeIssuesCount }} 筆 / 封存備查 {{ archivedIssuesCount }} 筆)</span>
+          <span>後台管理模式 [{{ currentRoleName }}] (有效 {{ activeIssuesCount }} 筆 / 封存 {{ archivedIssuesCount }} 筆)</span>
         </div>
         <div class="flex items-center gap-2">
-          <!-- 封存備查庫切換開關 -->
           <button @click="toggleArchiveView" :class="showArchived ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-600 hover:bg-slate-700'" class="text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1 transition">
             <i class="fa-solid fa-box-archive"></i>{{ showArchived ? '返回常規看板' : '封存備查庫' }}
           </button>
-          <!-- 匯出按鈕 -->
           <button @click="openExportModalWithAuth" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1">
             <i class="fa-solid fa-file-export"></i>自訂匯出
           </button>
@@ -252,7 +254,7 @@
                 <span class="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ issue.category }}</span>
               </div>
               <div class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-700 font-mono">
-                查詢密碼：<strong>{{ issue.queryPassword }}</strong>
+                手機末4碼：<strong>{{ issue.queryPassword }}</strong>
               </div>
             </div>
             
@@ -275,7 +277,6 @@
                 <span class="text-[11px] text-amber-700">分派負責：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
               </div>
 
-              <!-- 指派選項 (結案後直接隱藏停止變更) -->
               <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex flex-wrap gap-2 items-center">
                 <span class="text-slate-600">更換指派：</span>
                 <select @change="assignIssueWithAuth(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
@@ -291,7 +292,6 @@
                 </select>
               </div>
 
-              <!-- 協處紀錄清單 -->
               <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200">
                 <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700 flex justify-between items-center">
                   <span>• <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span></span>
@@ -302,7 +302,6 @@
                 無協處意見紀錄
               </div>
 
-              <!-- 填寫內部意見 (結案後直接隱藏停止輸入) -->
               <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex gap-2 pt-1">
                 <input 
                   v-model="issue.tempNote" 
@@ -324,7 +323,6 @@
                 <span v-if="issue.status === '已結案'" class="text-emerald-700 text-[11px] font-semibold"><i class="fa-solid fa-lock mr-1"></i>此案已正式結案，資料已封裝存檔</span>
               </div>
               
-              <!-- 結案前顯示輸入框，結案後轉為唯讀區塊完全禁止編輯 -->
               <textarea 
                 v-if="!issue.isArchived && issue.status !== '已結案'"
                 v-model="issue.tempFinalReply" 
@@ -337,20 +335,17 @@
                 <div class="text-[10px] text-slate-400 mt-1 font-normal">結案發布時間：{{ issue.repliedAt }}</div>
               </div>
               
-              <!-- 處置附件清單 -->
               <div v-if="issue.replyFiles && issue.replyFiles.length > 0">
                 <div class="text-[11px] text-slate-600 mb-1">處置紀錄附件：</div>
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-1">
                   <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
                     <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
                     <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
-                    <!-- 結案後隱藏刪除附件按鈕 -->
                     <button v-if="!issue.isArchived && issue.status !== '已結案'" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
                   </div>
                 </div>
               </div>
 
-              <!-- 上傳附件功能 (結案後徹底隱藏) -->
               <div v-if="!issue.isArchived && issue.status !== '已結案'" class="pt-1">
                 <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
                 <input 
@@ -375,9 +370,7 @@
                 </div>
                 
                 <div class="flex items-center gap-2">
-                  <!-- 未封存狀態 -->
                   <template v-if="!issue.isArchived">
-                    <!-- 結案前：可更新進度與正式結案發布 -->
                     <template v-if="issue.status !== '已結案'">
                       <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 rounded text-xs transition shadow">
                         更新進度
@@ -387,20 +380,17 @@
                       </button>
                     </template>
 
-                    <!-- 結案後：按鈕徹底變更為灰底停用樣式，且停止所有操作功能 -->
                     <template v-else>
                       <div class="bg-slate-200 text-slate-500 border border-slate-300 font-semibold px-3 py-1.5 rounded text-xs flex items-center gap-1.5 cursor-not-allowed select-none">
                         <i class="fa-solid fa-check-double text-slate-500"></i>已正式結案 (功能已鎖定)
                       </div>
                     </template>
 
-                    <!-- 封存按鈕依然可用於歸檔 -->
                     <button @click="archiveIssueWithAuth(issue)" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center gap-1 shadow" title="從前台與常規看板隱藏，移入備查庫">
                       <i class="fa-solid fa-box-archive"></i>封存隱藏
                     </button>
                   </template>
 
-                  <!-- 備查庫狀態 -->
                   <template v-else>
                     <button @click="unarchiveIssueWithAuth(issue)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-xs shadow">
                       <i class="fa-solid fa-rotate-left mr-1"></i>解除封存還原
@@ -511,35 +501,12 @@
     <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
 </div>
-<script>
-  // 🔐 權限與密碼清單
-  const GENERAL_BACKEND_PASSWORD = '3204'; // 後台瀏覽共同密碼
-  const DIRECTOR_PASSWORD = '8888';        // 主任最高權限密碼
-  const DIRECTOR_ROLE_PASSWORD = '1001';   // 主任分派身分密碼 (輸入 1001 或 8888 均視為主任本人)
 
-  // 🔔 ntfy 推播頻道名稱 (請與手機 ntfy App 訂閱之主題名稱保持一致)
+<script>
+  // 🔔 ntfy 推播頻道名稱 (已移除所有寫死在前端的管理員密碼！)
   const NTFY_TOPIC = 'gsg_tel_2026';
 
-  // 輔助函式：判斷是否為主任本人 (支援 8888 與 1001 雙密碼相容)
-  function isDirectorAuth(pwd) {
-    if (!pwd) return false;
-    const clean = pwd.trim();
-    return clean === DIRECTOR_PASSWORD || clean === DIRECTOR_ROLE_PASSWORD;
-  }
-
-  // 各分派對象專屬操作密碼 (點選輸入內部意見時核身)
-  const ROLE_PASSWORDS = {
-    '總幹事/主任': '1001',
-    '主任委員意見': '1002',
-    '財務委員意見': '1003',
-    '設備委員意見': '1004',
-    '安全委員意見': '1005',
-    '環保委員意見': '1006',
-    '總務委員意見': '1007',
-    '文康委員意見': '1008'
-  };
-
-  // ☁️ 你的 Supabase 設定
+  // ☁️ Supabase 設定
   const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
 
@@ -558,17 +525,23 @@
     data() {
       return {
         isAdmin: false,
-        showArchived: false,   // 是否正在查看「封存備查庫」
+        currentAdminPwd: '',   // 暫存已通過雲端驗證的密碼 (不寫死在程式碼)
+        currentRoleName: '',   // 雲端回傳的職稱 (例如：主任(最高權限)、設備委員)
+        showArchived: false,
         residentTab: 'submit',
         trackKeyword: '',
         trackPassword: '',
+        residentResults: [],   // 僅存放單筆核身通過的案件
+        hasSearched: false,
+        trackFailCount: 0,
+        trackCooldown: 0,
         adminSearch: '',
         adminFilterCategory: '',
         loading: false,
         submitting: false,
-        previewImageUrl: null, // 點擊放大相片燈箱變數
-        imageScale: 1,         // 圖片縮放比例
-        unlockedNotes: {},     // 記錄已通過密碼解鎖輸入權限的案件
+        previewImageUrl: null,
+        imageScale: 1,
+        unlockedNotes: {},
         form: {
           unit: '',
           queryPassword: '',
@@ -588,32 +561,15 @@
       };
     },
     computed: {
-      // 住戶進度查詢：已封存隱藏的案件會自動在前台隱藏
-      filteredResidentIssues() {
-        const kw = this.trackKeyword.trim().toLowerCase();
-        const pwd = this.trackPassword.trim();
-        if (!kw || !pwd) return [];
-
-        return this.issues.filter(i => {
-          if (i.isArchived) return false;
-          const matchCodeOrUnit = (i.id && i.id.toLowerCase().includes(kw)) || (i.unit && i.unit.toLowerCase().includes(kw));
-          const matchPwd = (i.queryPassword && i.queryPassword.toString().trim() === pwd);
-          return matchCodeOrUnit && matchPwd;
-        });
-      },
-      // 常規有效案件數量
       activeIssuesCount() {
         return this.issues.filter(i => !i.isArchived).length;
       },
-      // 封存備查案件數量
       archivedIssuesCount() {
         return this.issues.filter(i => i.isArchived).length;
       },
-      // 當前後台看板顯示的案件集合 (依據是否切換至備查庫)
       currentDisplayIssues() {
         return this.issues.filter(i => this.showArchived ? i.isArchived : !i.isArchived);
       },
-      // 後台搜尋與篩選
       filteredAdminIssues() {
         return this.currentDisplayIssues.filter(i => {
           const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
@@ -624,7 +580,6 @@
           return matchCat && matchSearch;
         });
       },
-      // 匯出篩選
       matchedExportIssues() {
         return this.issues.filter(item => {
           if (!this.exportConfig.includeArchived && item.isArchived) return false;
@@ -640,28 +595,39 @@
       }
     },
     mounted() {
-      this.fetchIssues();
-
-      // 支援網址直達查詢或專屬備查直達
+      // 安全強化：一進網頁不再自動下載全社區案件！
+      // 若網址帶有 ?code=CASE-xxx，自動切換到查詢頁並帶入案號，但不帶密碼（防連結轉傳外洩）
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
-      const pwd = urlParams.get('pwd');
       const isArchivedParam = urlParams.get('archive');
 
-      if (code && pwd) {
+      if (code) {
         if (isArchivedParam === '1') {
-          this.isAdmin = true;
-          this.showArchived = true;
-          this.adminSearch = code;
+          this.promptAdminLogin(code);
         } else {
           this.residentTab = 'track';
           this.trackKeyword = code;
-          this.trackPassword = pwd;
         }
       }
     },
     methods: {
-      // 圖片放大燈箱控制
+      // 透過雲端 RPC 驗證委員/管理員密碼
+      async verifyCloudAdmin(pwd) {
+        if (!pwd || !supabaseClient) return null;
+        const { data, error } = await supabaseClient.rpc('get_admin_issues', {
+          p_admin_pwd: pwd.trim()
+        });
+        if (error || !data || data.status !== 'success') return null;
+        return data; // 回傳 { status: 'success', role: '...', data: [...] }
+      },
+
+      // 驗證是否為主任最高權限
+      async verifyDirectorCloud(pwd) {
+        const res = await this.verifyCloudAdmin(pwd);
+        if (!res) return false;
+        return res.role.includes('主任') || res.role.includes('總幹事');
+      },
+
       openImageModal(url) {
         this.previewImageUrl = url;
         this.imageScale = 1;
@@ -671,47 +637,131 @@
         this.imageScale = 1;
       },
       zoomIn() {
-        if (this.imageScale < 3.0) {
-          this.imageScale = Math.round((this.imageScale + 0.25) * 100) / 100;
-        }
+        if (this.imageScale < 3.0) this.imageScale = Math.round((this.imageScale + 0.25) * 100) / 100;
       },
       zoomOut() {
-        if (this.imageScale > 0.5) {
-          this.imageScale = Math.round((this.imageScale - 0.25) * 100) / 100;
-        }
+        if (this.imageScale > 0.5) this.imageScale = Math.round((this.imageScale - 0.25) * 100) / 100;
       },
       resetZoom() {
         this.imageScale = 1;
       },
 
-      // 後台登入
-      promptAdminLogin() {
-        const input = prompt('請輸入管理後台密碼：');
-        if (input === null) return;
-        const clean = input.trim();
-        if (clean === GENERAL_BACKEND_PASSWORD || isDirectorAuth(clean)) {
-          this.isAdmin = true;
-          this.showArchived = false;
-          this.fetchIssues();
-        } else {
-          alert('密碼錯誤！無法進入後台。');
+      // 住戶單筆安全查詢 (向雲端核對 案號/戶號 + 手機末4碼)
+      async searchResidentIssue() {
+        if (this.trackCooldown > 0) return;
+        const kw = this.trackKeyword.trim();
+        const pwd = this.trackPassword.trim();
+        if (!kw || !pwd) return;
+
+        this.loading = true;
+        this.hasSearched = true;
+        try {
+          const { data, error } = await supabaseClient.rpc('get_resident_issue', {
+            p_keyword: kw,
+            p_pwd: pwd
+          });
+
+          if (error) throw error;
+          this.residentResults = Array.isArray(data) ? data : [];
+
+          if (this.residentResults.length === 0) {
+            this.trackFailCount++;
+            // 防暴力猜測：每錯 3 次強制冷卻 15 秒
+            if (this.trackFailCount >= 3) {
+              this.startTrackCooldown(15);
+            }
+          } else {
+            this.trackFailCount = 0;
+          }
+        } catch (err) {
+          console.error('查詢失敗：', err);
+          alert('查詢連線異常，請稍後再試。');
+        } finally {
+          this.loading = false;
         }
       },
-      adminLogout() {
-        this.isAdmin = false;
-        this.showArchived = false;
-        this.unlockedNotes = {};
+
+      startTrackCooldown(seconds) {
+        this.trackCooldown = seconds;
+        const timer = setInterval(() => {
+          this.trackCooldown--;
+          if (this.trackCooldown <= 0) {
+            clearInterval(timer);
+            this.trackFailCount = 0;
+          }
+        }, 1000);
       },
+
       clearTrackInput() {
         this.trackKeyword = '';
         this.trackPassword = '';
+        this.residentResults = [];
+        this.hasSearched = false;
       },
 
-      // 切換「封存備查庫」檢視（輸入 8888 或 1001 均可）
-      toggleArchiveView() {
+      // 後台登入 (雲端驗證)
+      async promptAdminLogin(prefillSearchCode = '') {
+        const input = prompt('請輸入管理後台或委員專屬密碼：');
+        if (input === null) return;
+
+        this.loading = true;
+        try {
+          const res = await this.verifyCloudAdmin(input);
+          if (res) {
+            this.isAdmin = true;
+            this.currentAdminPwd = input.trim();
+            this.currentRoleName = res.role;
+            this.issues = (res.data || []).map(item => ({
+              ...item,
+              isArchived: item.isArchived || false,
+              tempNote: '',
+              tempFinalReply: item.finalReply || ''
+            }));
+            if (prefillSearchCode) {
+              this.showArchived = true;
+              this.adminSearch = prefillSearchCode;
+            } else {
+              this.showArchived = false;
+            }
+          } else {
+            alert('密碼錯誤！無法進入後台。');
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async refreshAdminIssues() {
+        if (!this.isAdmin || !this.currentAdminPwd) return;
+        this.loading = true;
+        try {
+          const res = await this.verifyCloudAdmin(this.currentAdminPwd);
+          if (res) {
+            this.issues = (res.data || []).map(item => ({
+              ...item,
+              isArchived: item.isArchived || false,
+              tempNote: '',
+              tempFinalReply: item.finalReply || ''
+            }));
+          }
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      adminLogout() {
+        this.isAdmin = false;
+        this.currentAdminPwd = '';
+        this.currentRoleName = '';
+        this.showArchived = false;
+        this.unlockedNotes = {};
+        this.issues = []; // 登出立即清空記憶體中的敏感資料
+      },
+
+      async toggleArchiveView() {
         if (!this.showArchived) {
           const pwd = prompt('進入封存備查庫需主任授權，請輸入主任密碼：');
-          if (isDirectorAuth(pwd)) {
+          if (await this.verifyDirectorCloud(pwd)) {
             this.showArchived = true;
           } else {
             alert('密碼錯誤！無法進入備查庫。');
@@ -721,54 +771,43 @@
         }
       },
 
-      // 封存並隱藏整筆反映案件
       async archiveIssueWithAuth(issue) {
-        const confirmAction = confirm(`確定要將案件【${issue.id} - ${issue.unit}】從前台與常規看板隱藏，移入封存備查庫嗎？`);
-        if (!confirmAction) return;
-
+        if (!confirm(`確定要將案件【${issue.id} - ${issue.unit}】從前台與常規看板隱藏，移入封存備查庫嗎？`)) return;
         const pwd = prompt('請輸入主任密碼以執行案件封存：');
-        if (!isDirectorAuth(pwd)) {
+        if (!(await this.verifyDirectorCloud(pwd))) {
           alert('主任密碼錯誤！無法封存。');
           return;
         }
-
         issue.isArchived = true;
         await this.syncUpdate(issue);
-        alert(`案件【${issue.id}】已成功封存隱藏！\n資料已安全轉入「封存備查庫」，住戶前台已不再顯示。`);
+        alert(`案件【${issue.id}】已成功封存隱藏！`);
       },
 
-      // 解除封存並還原
       async unarchiveIssueWithAuth(issue) {
         const pwd = prompt('請輸入主任密碼以解除封存還原案件：');
-        if (!isDirectorAuth(pwd)) {
+        if (!(await this.verifyDirectorCloud(pwd))) {
           alert('主任密碼錯誤！無法還原。');
           return;
         }
-
         issue.isArchived = false;
         await this.syncUpdate(issue);
         alert(`案件【${issue.id}】已成功還原至常規看板！`);
       },
 
-      // 永久徹底刪除整筆資料
       async permanentlyDeleteIssueWithAuth(issue) {
         const doubleCheck = prompt(`⚠️ 危險操作！此動作將永久銷毀案件【${issue.id}】之所有說明與附件，無法還原！\n請輸入大寫「DELETE」以確認刪除：`);
         if (doubleCheck !== 'DELETE') {
           alert('輸入不符，已取消永久刪除操作。');
           return;
         }
-
         const pwd = prompt('最後一步：請輸入主任最高密碼以確認永久銷毀：');
-        if (!isDirectorAuth(pwd)) {
+        if (!(await this.verifyDirectorCloud(pwd))) {
           alert('密碼驗證失敗！無法刪除。');
           return;
         }
-
         try {
-          if (supabaseClient) {
-            const { error } = await supabaseClient.from('issues').delete().eq('id', issue.id);
-            if (error) throw error;
-          }
+          const { error } = await supabaseClient.from('issues').delete().eq('id', issue.id);
+          if (error) throw error;
           this.issues = this.issues.filter(i => i.id !== issue.id);
           alert(`案件【${issue.id}】已從雲端資料庫徹底銷毀！`);
         } catch (err) {
@@ -776,62 +815,51 @@
         }
       },
 
-      // 複製專屬獨立備查直達連結
+      // 複製備查連結 (已移除明碼密碼)
       copyArchiveRecordLink(issue) {
         const baseUrl = window.location.origin + window.location.pathname;
-        const recordUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&pwd=${encodeURIComponent(issue.queryPassword)}&archive=1`;
-        const memoText = `【最上境社區案件備查紀錄】\n案件編號：${issue.id}\n反映戶號：${issue.unit}\n類別：${issue.category}\n反映說明：${issue.description}\n管委會結論：${issue.finalReply || '尚無紀錄'}\n\n管委會專屬備查直達連結：\n${recordUrl}`;
+        const recordUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&archive=1`;
+        const memoText = `【最上境社區案件備查紀錄】\n案件編號：${issue.id}\n反映戶號：${issue.unit}\n類別：${issue.category}\n反映說明：${issue.description}\n管委會結論：${issue.finalReply || '尚無紀錄'}\n\n管委會專屬備查直達連結（需輸入主任密碼開啟）：\n${recordUrl}`;
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(memoText).then(() => {
-            alert('已成功複製備查資料與專屬直達連結！\n可直接貼入管委會工作紀錄或會議日誌備查。');
-          }).catch(() => {
-            prompt('請手動複製以下備查內容：', memoText);
-          });
+            alert('已成功複製備查資料與安全直達連結！');
+          }).catch(() => prompt('請手動複製以下備查內容：', memoText));
         } else {
           prompt('請手動複製以下備查內容：', memoText);
         }
       },
 
-      // 匯出備份（支援 8888 或 1001）
-      openExportModalWithAuth() {
+      async openExportModalWithAuth() {
         const pwd = prompt('自訂匯出功能僅限主任與最高權限使用，請輸入主任密碼：');
-        if (isDirectorAuth(pwd)) {
+        if (await this.verifyDirectorCloud(pwd)) {
           this.showExportModal = true;
         } else {
           alert('密碼驗證失敗！無權限使用匯出功能。');
         }
       },
 
-      // 點選輸入「內部意見」時：核對專屬密碼（分派給主任時輸入 1001 或 8888 均立即通過）
-      checkNoteInputAuth(issue) {
+      async checkNoteInputAuth(issue) {
         if (this.unlockedNotes[issue.id]) return;
-
         const targetRole = issue.assignedTo || '總幹事/主任';
-        const expectedPwd = ROLE_PASSWORDS[targetRole] || '1001';
-
-        const input = prompt(`此案件目前分派至【${targetRole}】。\n請輸入該分派對象專屬密碼以取得輸入資格：`);
+        const input = prompt(`此案件目前分派至【${targetRole}】。\n請輸入您的委員或主任專屬密碼以取得輸入資格：`);
         if (input === null) {
           document.activeElement.blur();
           return;
         }
-
-        const clean = input.trim();
-        const isMatch = (clean === expectedPwd) || isDirectorAuth(clean);
-
-        if (!isMatch) {
-          alert(`密碼驗證錯誤！非【${targetRole}】本人無權輸入資料。`);
+        const res = await this.verifyCloudAdmin(input);
+        if (!res || res.role === '後台檢視人員') {
+          alert('密碼驗證錯誤！無權輸入意見。');
           document.activeElement.blur();
         } else {
-          this.unlockedNotes[issue.id] = true;
+          this.unlockedNotes[issue.id] = res.role; // 記錄實際驗證通過的職稱
         }
       },
 
-      // 點選輸入「主任結案說明」時：支援 8888 與 1001
-      checkFinalReplyAuth(issue) {
+      async checkFinalReplyAuth(issue) {
         if (issue._replyUnlocked) return;
         const input = prompt('統整處置說明需由主任親自填寫，請輸入主任密碼：');
-        if (isDirectorAuth(input)) {
+        if (await this.verifyDirectorCloud(input)) {
           issue._replyUnlocked = true;
         } else {
           alert('密碼驗證錯誤！僅限主任有權編輯公開說明。');
@@ -839,104 +867,90 @@
         }
       },
 
-      // 點選「上傳處置附件」時：支援 8888 與 1001
-      checkFileUploadAuth(e) {
+      async checkFileUploadAuth(e) {
         const input = prompt('上傳處置附件需由主任授權，請輸入主任密碼：');
-        if (!isDirectorAuth(input)) {
+        if (!(await this.verifyDirectorCloud(input))) {
           alert('密碼驗證錯誤！無法上傳附件。');
           e.preventDefault();
         }
       },
 
-      // 點選「記下」：輸入 8888 或 1001 覆核後保存
-      addInternalNoteWithDirector(issue) {
+      async addInternalNoteWithDirector(issue) {
         if (!issue.tempNote?.trim()) {
           alert('請先輸入意見內容！');
           return;
         }
-
         const inputPwd = prompt('【主任覆核】存檔請輸入主任密碼：');
-        if (isDirectorAuth(inputPwd)) {
+        if (await this.verifyDirectorCloud(inputPwd)) {
           const now = new Date();
           const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
           if (!issue.internalNotes) issue.internalNotes = [];
           
           issue.internalNotes.push({
-            role: issue.assignedTo || '總幹事/主任',
+            role: this.unlockedNotes[issue.id] || issue.assignedTo || '總幹事/主任',
             comment: issue.tempNote.trim(),
             time: timeStr
           });
           issue.tempNote = '';
-          this.syncUpdate(issue);
+          await this.syncUpdate(issue);
           alert('主任已確認覆核，意見已成功記下並保存！');
         } else {
           alert('主任密碼驗證錯誤！無法儲存該筆資料。');
         }
       },
 
-      deleteInternalNoteWithAuth(issue, idx) {
+      async deleteInternalNoteWithAuth(issue, idx) {
         const inputPwd = prompt('刪除內部協處紀錄需主任授權，請輸入主任密碼：');
-        if (isDirectorAuth(inputPwd)) {
+        if (await this.verifyDirectorCloud(inputPwd)) {
           issue.internalNotes.splice(idx, 1);
-          this.syncUpdate(issue);
+          await this.syncUpdate(issue);
           alert('紀錄已刪除！');
         } else {
           alert('密碼驗證錯誤！無法刪除。');
         }
       },
 
-      assignIssueWithAuth(issue, role) {
+      async assignIssueWithAuth(issue, role) {
         const pwd = prompt('更換案件分派對象需主任核准，請輸入主任密碼：');
-        if (!isDirectorAuth(pwd)) {
+        if (!(await this.verifyDirectorCloud(pwd))) {
           alert('密碼錯誤！無法變更指派對象。');
           return;
         }
         issue.assignedTo = role;
         issue.status = role.includes('委員') ? '管委會研議' : '處理中';
         delete this.unlockedNotes[issue.id];
-        this.syncUpdate(issue);
+        await this.syncUpdate(issue);
         alert(`已成功分派至【${role}】！`);
       },
 
-      deleteAdminReplyFile(issue, pIdx) {
+      async deleteAdminReplyFile(issue, pIdx) {
         const pwd = prompt('請輸入主任密碼以確認刪除附件：');
-        if (isDirectorAuth(pwd)) {
+        if (await this.verifyDirectorCloud(pwd)) {
           issue.replyFiles.splice(pIdx, 1);
-          this.syncUpdate(issue);
+          await this.syncUpdate(issue);
         } else {
           alert('密碼錯誤！無法刪除附件。');
         }
       },
 
-      // 住戶端上傳直傳 Storage
       async handleResidentFileUpload(e) {
         const files = Array.from(e.target.files);
         if (this.residentFiles.length + files.length > 3) {
           alert('相片與影片最多只能選取 3 則！');
           return;
         }
-
         for (const file of files) {
           if (file.size > 25 * 1024 * 1024) {
             alert(`檔案「${file.name}」超過 25MB，請截短影片或重新壓縮後再上傳！`);
             continue;
           }
-
           try {
             const ext = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
             const filePath = `resident/${fileName}`;
-
-            const { data, error } = await supabaseClient.storage
-              .from('community-files')
-              .upload(filePath, file);
-
+            const { error } = await supabaseClient.storage.from('community-files').upload(filePath, file);
             if (error) throw error;
-
-            const { data: { publicUrl } } = supabaseClient.storage
-              .from('community-files')
-              .getPublicUrl(filePath);
-
+            const { data: { publicUrl } } = supabaseClient.storage.from('community-files').getPublicUrl(filePath);
             this.residentFiles.push({
               name: file.name,
               type: file.type.startsWith('video') ? 'video/mp4' : 'image/jpeg',
@@ -949,7 +963,6 @@
         }
       },
 
-      // 主任後台附件直傳 Storage
       async handleAdminFileUpload(issue, e) {
         if (!issue.replyFiles) issue.replyFiles = [];
         const files = Array.from(e.target.files);
@@ -957,72 +970,34 @@
           alert('處置紀錄檔案最多只能上傳 5 個！');
           return;
         }
-
         for (const file of files) {
           if (file.size > 25 * 1024 * 1024) {
             alert(`檔案「${file.name}」超過 25MB，請截短或壓縮後再上傳！`);
             continue;
           }
-
           try {
             const ext = file.name.split('.').pop();
             const fileName = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
             const filePath = `admin/${fileName}`;
-
-            const { data, error } = await supabaseClient.storage
-              .from('community-files')
-              .upload(filePath, file);
-
+            const { error } = await supabaseClient.storage.from('community-files').upload(filePath, file);
             if (error) throw error;
-
-            const { data: { publicUrl } } = supabaseClient.storage
-              .from('community-files')
-              .getPublicUrl(filePath);
-
+            const { data: { publicUrl } } = supabaseClient.storage.from('community-files').getPublicUrl(filePath);
             let fileType = 'application/octet-stream';
             if (file.type.startsWith('image')) fileType = 'image/jpeg';
             else if (file.type.startsWith('video')) fileType = 'video/mp4';
-
-            issue.replyFiles.push({
-              name: file.name,
-              type: fileType,
-              data: publicUrl
-            });
+            issue.replyFiles.push({ name: file.name, type: fileType, data: publicUrl });
           } catch (err) {
             console.error('後台檔案上傳失敗：', err);
             alert(`「${file.name}」上傳失敗，請檢查網路或 Storage 權限！`);
           }
         }
-        this.syncUpdate(issue);
-      },
-
-      async fetchIssues() {
-        if (!supabaseClient) return;
-        this.loading = true;
-        try {
-          const { data, error } = await supabaseClient
-            .from('issues')
-            .select('*')
-            .order('createdAt', { ascending: false });
-
-          if (!error && Array.isArray(data)) {
-            this.issues = data.map(item => ({
-              ...item,
-              isArchived: item.isArchived || false,
-              tempNote: '',
-              tempFinalReply: item.finalReply || ''
-            }));
-          }
-        } catch (err) {
-          console.warn('雲端載入略過');
-        } finally {
-          this.loading = false;
-        }
+        await this.syncUpdate(issue);
       },
 
       async submitIssue() {
-        if (!this.form.queryPassword.trim()) {
-          alert('請設定自訂查詢密碼，以便日後查驗案件！');
+        const last4 = this.form.queryPassword.trim();
+        if (!/^\d{4}$/.test(last4)) {
+          alert('請輸入正確的 4 位數字手機末 4 碼！');
           return;
         }
 
@@ -1034,10 +1009,10 @@
           
           const newIssue = {
             id: caseId,
-            unit: this.form.unit,
-            queryPassword: this.form.queryPassword.trim(),
+            unit: this.form.unit.trim(),
+            queryPassword: last4,
             category: this.form.category,
-            description: this.form.description,
+            description: this.form.description.trim(),
             files: [...this.residentFiles],
             createdAt: timeStr,
             status: '待分派',
@@ -1054,16 +1029,11 @@
             if (error) throw error;
           }
 
-          this.issues.unshift(newIssue);
-
-          // 📲 即時手機 App 原生橫幅推播（標準 JSON 格式，完整支援繁體中文）
           try {
-            const currentUrl = window.location.href;
+            const currentUrl = window.location.origin + window.location.pathname;
             fetch('https://ntfy.sh', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 topic: NTFY_TOPIC,
                 title: '最上境社區 - 新反映通報',
@@ -1073,14 +1043,14 @@
                 click: currentUrl
               })
             }).catch(e => console.warn('推播略過：', e));
-          } catch (e) {
-            console.warn('推播例外略過：', e);
-          }
+          } catch (e) {}
 
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢密碼：${this.form.queryPassword.trim()}\n資料已即時同步至雲端，並已發送推播通知主任。`);
+          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢核身：手機末 4 碼 (${last4})\n資料已即時同步至雲端，並已發送推播通知主任。`);
           
           this.trackKeyword = caseId;
-          this.trackPassword = this.form.queryPassword.trim();
+          this.trackPassword = last4;
+          this.residentResults = [newIssue];
+          this.hasSearched = true;
 
           this.form.unit = '';
           this.form.queryPassword = '';
@@ -1117,20 +1087,17 @@
         }
       },
 
-      // 發布進度或正式結案 (密碼支援 8888 或 1001；發布結案後徹底鎖死按鈕與編輯)
       async publishToResident(issue, status) {
         if (issue.status === '已結案') {
           alert('此案件已正式結案，所有功能已鎖定停用！');
           return;
         }
-
         if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
           alert('請輸入回覆給住戶的說明內容！');
           return;
         }
-
         const inputPwd = prompt(`請輸入主任密碼以執行【${status}】發布：`);
-        if (!isDirectorAuth(inputPwd)) {
+        if (!(await this.verifyDirectorCloud(inputPwd))) {
           alert('主任密碼錯誤！無法發布。');
           return;
         }
@@ -1139,9 +1106,7 @@
         const oldReply = issue.finalReply;
         const oldTime = issue.repliedAt;
 
-        if (issue.tempFinalReply?.trim()) {
-          issue.finalReply = issue.tempFinalReply.trim();
-        }
+        if (issue.tempFinalReply?.trim()) issue.finalReply = issue.tempFinalReply.trim();
         issue.status = status;
         const now = new Date();
         issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -1149,7 +1114,7 @@
         try {
           await this.syncUpdate(issue);
           issue.tempFinalReply = '';
-          alert(`已成功發布！狀態已正式變更為【${status}】。\n${status === '已結案' ? '案件已全數封裝鎖定，按鈕已轉為結案停用狀態。' : ''}`);
+          alert(`已成功發布！狀態已正式變更為【${status}】。`);
         } catch (err) {
           issue.status = oldStatus;
           issue.finalReply = oldReply;
@@ -1158,17 +1123,16 @@
         }
       },
 
+      // 複製 LINE 通知連結 (安全版：只帶案號，不帶明碼密碼)
       copyLineNotifyLink(issue) {
         const baseUrl = window.location.origin + window.location.pathname;
-        const directUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&pwd=${encodeURIComponent(issue.queryPassword)}`;
-        const lineMessage = `【最上境社區反映處置回覆通知】\n親愛的住戶（${issue.unit}）您好：\n您先前反映的案件【${issue.id}】已有最新處理進度。\n目前狀態：【${issue.status}】\n\n點擊下方專屬連結可免輸入密碼直接查看完整處理進度與說明：\n${directUrl}`;
+        const directUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}`;
+        const lineMessage = `【最上境社區反映處置回覆通知】\n親愛的住戶（${issue.unit}）您好：\n您先前反映的案件【${issue.id}】已有最新處理進度。\n目前狀態：【${issue.status}】\n\n點擊下方專屬連結，輸入您的「手機末 4 碼」即可查看完整處理進度與說明：\n${directUrl}`;
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(lineMessage).then(() => {
-            alert('已成功複製 LINE 通知文字與專屬查詢連結！\n請直接至 LINE 貼上發送給住戶。');
-          }).catch(() => {
-            prompt('請手動複製以下訊息傳給住戶：', lineMessage);
-          });
+            alert('已成功複製 LINE 通知文字與安全查詢連結！\n(連結已移除明碼密碼，住戶點開後輸入手機末4碼即可查看)');
+          }).catch(() => prompt('請手動複製以下訊息傳給住戶：', lineMessage));
         } else {
           prompt('請手動複製以下訊息傳給住戶：', lineMessage);
         }
@@ -1180,11 +1144,10 @@
           alert('所選篩選條件下無任何案件資料可匯出！');
           return;
         }
-
         const dateTag = new Date().toISOString().slice(0, 10);
 
         if (this.exportConfig.format === 'csv') {
-          const headers = ['案件編號', '戶號', '查詢密碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '是否已封存'];
+          const headers = ['案件編號', '戶號', '手機末4碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '是否已封存'];
           const csvRows = targetList.map(item => {
             const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
             const notesText = (item.internalNotes || []).map(n => `[${n.role}] ${n.comment} (${n.time})`).join('；');
@@ -1211,7 +1174,6 @@
                 <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:bold;">${item.status}</span>
               </div>
               <p style="color:#334155;margin:8px 0;line-height:1.5;"><strong>反映說明：</strong>${item.description}</p>
-              
               ${(item.files && item.files.length > 0) ? `
                 <div style="margin:10px 0;">
                   <strong style="font-size:12px;color:#64748b;">住戶檢附相片／影片：</strong>
@@ -1223,7 +1185,6 @@
                   </div>
                 </div>
               ` : ''}
-
               <div style="background:#f8fafc;border-left:4px solid #10b981;padding:10px;margin-top:10px;border-radius:0 4px 4px 0;">
                 <div style="font-weight:bold;font-size:13px;color:#0f172a;">管委會回覆 (${item.repliedAt || '未回覆'})：</div>
                 <div style="color:#334155;font-size:13px;margin-top:4px;">${item.finalReply || '尚無回覆紀錄'}</div>
@@ -1236,19 +1197,19 @@
                   </div>
                 ` : ''}
               </div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:8px;">提出時間：${item.createdAt} | 查詢密碼：${item.queryPassword}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:8px;">提出時間：${item.createdAt} | 手機末4碼：${item.queryPassword}</div>
             </div>
           `).join('');
 
           const fullHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>最上境社區案件報表</title></head><body style="background:#f1f5f9;padding:24px;max-width:800px;margin:auto;"><h2 style="color:#065f46;text-align:center;">最上境社區 - 案件報表 (${dateTag})</h2>${cardsHtml}</body></html>`;
           const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
+          a.href = url;
           a.download = `最上境社區案件可視化報表_${dateTag}.html`;
           a.click();
           URL.revokeObjectURL(url);
         }
-
         this.showExportModal = false;
       },
 

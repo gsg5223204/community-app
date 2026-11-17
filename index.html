@@ -17,7 +17,7 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased font-sans">
-<div id="app" v-cloak class="min-h-screen flex flex-col justify-between" :style="{ fontSize: currentFontSize + 'px' }">
+<div id="app" v-cloak class="min-h-screen flex flex-col justify-between">
 
   <!-- 頂部導航 -->
   <header class="bg-emerald-800 text-white shadow-md sticky top-0 z-50">
@@ -30,11 +30,6 @@
         </div>
       </div>
       <div class="flex items-center space-x-2">
-      <!-- 新增：字體放大按鈕 -->
-        <button @click="toggleFontSize" :title="fontSizeNames[fontLevel]" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white flex items-center space-x-1 font-bold">
-          <i class="fa-solid fa-text-height"></i>
-          <span>{{ fontSizeLabels[fontLevel] }}</span>
-        </button>  
         <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
@@ -528,21 +523,6 @@
 
   createApp({
     data() {
-      // 字體大小控制
-        const fontLevel = ref(0);
-        const fontSizeOptions = [16, 18, 20];
-        const fontSizeLabels = ['標準', '大', '特大'];
-        const fontSizeNames = ['切換至大字體', '切換至特大字體', '切換至標準字體'];
-
-        const currentFontSize = computed(() => fontSizeOptions[fontLevel.value]);
-        const toggleFontSize = () => {
-          fontLevel.value = (fontLevel.value + 1) % fontSizeOptions.length;
-        };
-      fontLevel,
-          currentFontSize,
-          toggleFontSize,
-          fontSizeLabels,
-          fontSizeNames,
       return {
         isAdmin: false,
         currentAdminPwd: '',   // 暫存已通過雲端驗證的密碼 (不寫死在程式碼)

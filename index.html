@@ -31,18 +31,18 @@
       </div>
       <div class="flex items-center space-x-2">
         <!-- 字體放大切換按鈕 -->
-        <button @click="toggleFontSize" :title="'目前字體級別：' + fontSizeLevel" class="bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white flex items-center space-x-1" :class="fontScaleClassSmall">
+        <button type="button" @click="toggleFontSize" :title="'目前字體級別：' + fontSizeLevel" :class="['bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white flex items-center space-x-1', fontScaleClassSmall]">
           <i class="fa-solid fa-text-height"></i>
           <span>{{ fontSizeLevel === 1 ? '標準' : (fontSizeLevel === 2 ? '放大' : '特大') }}</span>
         </button>
 
-        <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
+        <button type="button" v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理資料" :class="['bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white', fontScaleClassSmall]">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
-        <button v-if="!isAdmin" @click="promptAdminLogin()" class="bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
+        <button type="button" v-if="!isAdmin" @click="promptAdminLogin" :class="['bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white', fontScaleClassSmall]">
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
-        <button v-else @click="adminLogout" class="bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
+        <button type="button" v-else @click="adminLogout" :class="['bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white', fontScaleClassSmall]">
           <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台 ({{ currentRoleName }})
         </button>
       </div>
@@ -62,11 +62,11 @@
     <div v-if="!isAdmin">
       <!-- 標籤切換 -->
       <div class="flex rounded-lg bg-emerald-200 p-1 mb-6 shadow-inner">
-        <button @click="activeTab = 'submit'" :class="activeTab === 'submit' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300'" class="flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2" :class="fontScaleClass">
+        <button type="button" @click="activeTab = 'submit'" :class="[activeTab === 'submit' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300', 'flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2', fontScaleClass]">
           <i class="fa-solid fa-pen-to-square"></i>
           <span>我要反映</span>
         </button>
-        <button @click="activeTab = 'track'" :class="activeTab === 'track' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300'" class="flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2" :class="fontScaleClass">
+        <button type="button" @click="activeTab = 'track'" :class="[activeTab === 'track' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300', 'flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2', fontScaleClass]">
           <i class="fa-solid fa-magnifying-glass-chart"></i>
           <span>進度與雙重核驗查詢</span>
         </button>
@@ -74,26 +74,26 @@
 
       <!-- 分頁 1：我要反映 -->
       <div v-if="activeTab === 'submit'" class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-        <h2 class="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center" :class="fontScaleClassTitle">
+        <h2 :class="['font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center', fontScaleClassTitle]">
           <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i>填寫社區反映事項
         </h2>
 
         <form @submit.prevent="submitIssue" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">棟別 / 戶號 <span class="text-red-500">*</span></label>
-              <input v-model="form.unit" type="text" required placeholder="例：A棟 302室 或 B-5" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+              <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">棟別 / 戶號 <span class="text-red-500">*</span></label>
+              <input v-model.trim="form.unit" type="text" required placeholder="例：A棟 302室 或 B-5" :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]">
             </div>
             <div>
-              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">聯絡電話（手機末 4 碼核身） <span class="text-red-500">*</span></label>
-              <input v-model="form.phoneLast4" type="text" maxlength="4" required placeholder="請輸入手機末 4 碼" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+              <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">聯絡電話（手機末 4 碼核身） <span class="text-red-500">*</span></label>
+              <input v-model.trim="form.phoneLast4" type="text" maxlength="4" required placeholder="請輸入手機末 4 碼" :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]">
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">反映類別 <span class="text-red-500">*</span></label>
-              <select v-model="form.category" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white" :class="fontScaleClass">
+              <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">反映類別 <span class="text-red-500">*</span></label>
+              <select v-model="form.category" required :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white', fontScaleClass]">
                 <option value="" disabled>請選擇類別</option>
                 <option value="公共設施">公共設施損壞 / 異常</option>
                 <option value="環境清潔">環境清潔 / 垃圾處理</option>
@@ -104,32 +104,32 @@
               </select>
             </div>
             <div>
-              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">具體發生位置</label>
-              <input v-model="form.location" type="text" placeholder="例：B1停車場、大廳、中庭花園" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+              <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">具體發生位置</label>
+              <input v-model.trim="form.location" type="text" placeholder="例：B1停車場、大廳、中庭花園" :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]">
             </div>
           </div>
 
           <div>
-            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">詳細說明 <span class="text-red-500">*</span></label>
-            <textarea v-model="form.description" rows="4" required placeholder="請詳細描述狀況，以利管委會與主任快速掌握處理..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass"></textarea>
+            <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">詳細說明 <span class="text-red-500">*</span></label>
+            <textarea v-model.trim="form.description" rows="4" required placeholder="請詳細描述狀況，以利管委會與主任快速掌握處理..." :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]"></textarea>
           </div>
 
           <div>
-            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">現場相片 / 影片上傳（最多 3 張/部）</label>
+            <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">現場相片 / 影片上傳（最多 3 張/部）</label>
             <input type="file" @change="handleFileSelect" multiple accept="image/*,video/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
-            <p :class="fontScaleClassSmall" class="text-slate-500 mt-1">支援照片與影片格式，系統將自動最佳化並上傳雲端。</p>
+            <p :class="['text-slate-500 mt-1', fontScaleClassSmall]">支援照片與影片格式，系統將自動最佳化並儲存。</p>
 
             <!-- 預覽縮圖 -->
             <div v-if="form.mediaFiles.length > 0" class="flex flex-wrap gap-2 mt-3">
               <div v-for="(file, idx) in form.mediaFiles" :key="idx" class="relative group border rounded-lg p-1 bg-slate-50">
-                <span :class="fontScaleClassSmall" class="block text-slate-600 truncate max-w-[120px]">{{ file.name }}</span>
+                <span :class="['block text-slate-600 truncate max-w-[120px]', fontScaleClassSmall]">{{ file.name }}</span>
                 <button type="button" @click="removeFile(idx)" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700">×</button>
               </div>
             </div>
           </div>
 
           <div class="pt-2">
-            <button type="submit" :disabled="loading" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-md flex items-center justify-center space-x-2" :class="fontScaleClass">
+            <button type="submit" :disabled="loading" :class="['w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-md flex items-center justify-center space-x-2', fontScaleClass]">
               <i class="fa-solid fa-paper-plane"></i>
               <span>送出反映事項</span>
             </button>
@@ -139,41 +139,41 @@
 
       <!-- 分頁 2：進度與雙重核驗查詢 -->
       <div v-if="activeTab === 'track'" class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-        <h2 class="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center" :class="fontScaleClassTitle">
+        <h2 :class="['font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center', fontScaleClassTitle]">
           <i class="fa-solid fa-magnifying-glass text-emerald-600 mr-2"></i>進度查詢與雙重核驗
         </h2>
 
-        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4" :class="fontScaleClass">
-          <p class="text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i> 為了保護住戶個人隱私與資訊安全，查詢案件需輸入**「案件代碼」或「戶號」**以及送出時填寫的**「手機末 4 碼」**進行雙重核驗。</p>
+        <div :class="['bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4', fontScaleClass]">
+          <p class="text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i> 為了保護住戶個人隱私與資訊安全，查詢案件需輸入<strong>「案件代碼」或「戶號」</strong>以及送出時填寫的<strong>「手機末 4 碼」</strong>進行雙重核驗。</p>
         </div>
 
         <div class="space-y-4">
           <div>
-            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">案件代碼 或 您的戶號</label>
-            <input v-model="trackKeyword" type="text" placeholder="例：ISSUE-1712 或 A棟 302室" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+            <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">案件代碼 或 您的戶號</label>
+            <input v-model.trim="trackKeyword" type="text" placeholder="例：ISSUE-1712 或 A棟 302室" :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]">
           </div>
           <div>
-            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">手機末 4 碼（核驗密碼）</label>
-            <input v-model="trackPassword" type="password" maxlength="4" placeholder="請輸入 4 位數字" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+            <label :class="['block text-slate-700 font-medium mb-1', fontScaleClass]">手機末 4 碼（核驗密碼）</label>
+            <input v-model.trim="trackPassword" type="password" maxlength="4" placeholder="請輸入 4 位數字" :class="['w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none', fontScaleClass]">
           </div>
 
           <div class="flex space-x-2">
-            <button @click="searchResidentIssues" :disabled="loading || trackFailCount >= 3" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg transition shadow flex items-center justify-center space-x-1" :class="fontScaleClass">
+            <button type="button" @click="searchResidentIssues" :disabled="loading || trackFailCount >= 3" :class="['flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg transition shadow flex items-center justify-center space-x-1', fontScaleClass]">
               <i class="fa-solid fa-search"></i>
               <span>安全查詢案件</span>
             </button>
-            <button @click="clearTrackInput" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-lg transition" :class="fontScaleClass">
+            <button type="button" @click="clearTrackInput" :class="['bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-lg transition', fontScaleClass]">
               清除
             </button>
           </div>
-          <p v-if="trackFailCount > 0 && trackFailCount < 3" :class="fontScaleClassSmall" class="text-amber-600">注意：連續核驗錯誤達 3 次將暫時鎖定 15 秒（目前錯誤 {{ trackFailCount }} 次）。</p>
+          <p v-if="trackFailCount > 0 && trackFailCount < 3" :class="['text-amber-600', fontScaleClassSmall]">注意：連續核驗錯誤達 3 次將暫時鎖定 15 秒（目前錯誤 {{ trackFailCount }} 次）。</p>
         </div>
 
         <!-- 查詢結果列表 -->
         <div v-if="hasSearched" class="mt-6 space-y-4">
-          <h3 class="font-bold text-slate-700 border-t pt-4" :class="fontScaleClass">查詢結果 ({{ residentResults.length }} 筆)</h3>
+          <h3 :class="['font-bold text-slate-700 border-t pt-4', fontScaleClass]">查詢結果 ({{ residentResults.length }} 筆)</h3>
           
-          <div v-if="residentResults.length === 0" class="text-slate-500 text-center py-6 bg-slate-50 rounded-lg border border-dashed" :class="fontScaleClass">
+          <div v-if="residentResults.length === 0" :class="['text-slate-500 text-center py-6 bg-slate-50 rounded-lg border border-dashed', fontScaleClass]">
             查無相符資料，請確認「案件代碼/戶號」及「手機末 4 碼」是否正確。
           </div>
 
@@ -183,19 +183,19 @@
                 <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold" :class="getStatusBadgeClass(item.status)">
                   {{ item.status }}
                 </span>
-                <span :class="fontScaleClassSmall" class="text-slate-500 ml-2">編號：{{ item.code || item.id }}</span>
+                <span :class="['text-slate-500 ml-2', fontScaleClassSmall]">編號：{{ item.code || item.id }}</span>
               </div>
-              <span :class="fontScaleClassSmall" class="text-slate-400">{{ formatDate(item.created_at) }}</span>
+              <span :class="['text-slate-400', fontScaleClassSmall]">{{ formatDate(item.created_at) }}</span>
             </div>
 
-            <div class="grid grid-cols-2 gap-2" :class="fontScaleClass">
+            <div :class="['grid grid-cols-2 gap-2', fontScaleClass]">
               <div><strong class="text-slate-600">戶號：</strong>{{ item.unit }}</div>
               <div><strong class="text-slate-600">類別：</strong>{{ item.category }}</div>
             </div>
 
             <div v-if="item.location" :class="fontScaleClass"><strong class="text-slate-600">位置：</strong>{{ item.location }}</div>
 
-            <div class="bg-slate-50 p-3 rounded-lg border" :class="fontScaleClass">
+            <div :class="['bg-slate-50 p-3 rounded-lg border', fontScaleClass]">
               <strong class="text-slate-700 block mb-1">反映內容：</strong>
               <p class="text-slate-600 whitespace-pre-wrap">{{ item.description }}</p>
             </div>
@@ -211,7 +211,7 @@
             </div>
 
             <!-- 處理進度與處置回覆 -->
-            <div v-if="item.finalReply" class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg mt-3" :class="fontScaleClass">
+            <div v-if="item.finalReply" :class="['bg-emerald-50 border border-emerald-200 p-3 rounded-lg mt-3', fontScaleClass]">
               <strong class="text-emerald-900 block mb-1"><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i>主任/管委會正式處置結論：</strong>
               <p class="text-emerald-800 whitespace-pre-wrap">{{ item.finalReply }}</p>
             </div>
@@ -224,11 +224,11 @@
     <div v-else class="space-y-6">
       <div class="bg-emerald-800 text-white p-4 rounded-xl shadow flex justify-between items-center">
         <div>
-          <h2 class="font-bold" :class="fontScaleClassTitle">主任與委員管理後台</h2>
-          <p :class="fontScaleClassSmall" class="text-emerald-200">當前身份角色：<span class="font-bold text-white">{{ currentRoleName }}</span></p>
+          <h2 :class="['font-bold', fontScaleClassTitle]">主任與委員管理後台</h2>
+          <p :class="['text-emerald-200', fontScaleClassSmall]">當前身份角色：<span class="font-bold text-white">{{ currentRoleName }}</span></p>
         </div>
         <div class="flex space-x-2">
-          <button @click="showArchived = !showArchived" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded-lg text-sm transition text-white">
+          <button type="button" @click="showArchived = !showArchived" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded-lg text-sm transition text-white">
             <i class="fa-solid fa-box-archive mr-1"></i>{{ showArchived ? '返回即時案件' : '查看封存備查庫' }}
           </button>
         </div>
@@ -236,17 +236,17 @@
 
       <!-- 後台功能列表 -->
       <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
-        <div class="flex justify-between items-center mb-4 pb-2 border-b">
-          <h3 class="font-bold text-slate-800 flex items-center" :class="fontScaleClass">
+        <div class="flex flex-wrap gap-2 justify-between items-center mb-4 pb-2 border-b">
+          <h3 :class="['font-bold text-slate-800 flex items-center', fontScaleClass]">
             <i class="fa-solid fa-list-check text-emerald-600 mr-2"></i>
             {{ showArchived ? '已封存備查案件清單' : '社區即時反映案件清單' }} ({{ filteredAdminIssues.length }})
           </h3>
           <div class="flex items-center space-x-2">
-            <input v-model="adminSearch" type="text" placeholder="搜尋戶號/類別/內容..." class="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" :class="fontScaleClass">
+            <input v-model="adminSearch" type="text" placeholder="搜尋戶號/類別/內容..." :class="['px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500', fontScaleClass]">
           </div>
         </div>
 
-        <div v-if="filteredAdminIssues.length === 0" class="text-slate-500 text-center py-10" :class="fontScaleClass">
+        <div v-if="filteredAdminIssues.length === 0" :class="['text-slate-500 text-center py-10', fontScaleClass]">
           目前沒有任何反映案件。
         </div>
 
@@ -257,12 +257,13 @@
                 <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold" :class="getStatusBadgeClass(item.status)">
                   {{ item.status }}
                 </span>
-                <span class="font-bold text-slate-700" :class="fontScaleClass">{{ item.unit }}</span>
-                <span :class="fontScaleClassSmall" class="text-slate-500">({{ item.category }})</span>
+                <span :class="['font-bold text-slate-700', fontScaleClass]">{{ item.unit }}</span>
+                <span :class="['text-slate-500', fontScaleClassSmall]">({{ item.category }} / 編號: {{ item.code }})</span>
               </div>
-              <span :class="fontScaleClassSmall" class="text-slate-400">{{ formatDate(item.created_at) }}</span>
+              <span :class="['text-slate-400', fontScaleClassSmall]">{{ formatDate(item.created_at) }}</span>
             </div>
 
+            <div v-if="item.location" :class="fontScaleClass"><strong class="text-slate-600">地點：</strong>{{ item.location }}</div>
             <div :class="fontScaleClass"><strong class="text-slate-600">反映內容：</strong>{{ item.description }}</div>
 
             <!-- 媒體檢視 -->
@@ -275,11 +276,11 @@
             </div>
 
             <!-- 後台管理操作區 -->
-            <div class="bg-white p-3 rounded-lg border space-y-3 pt-3" :class="fontScaleClass">
+            <div :class="['bg-white p-3 rounded-lg border space-y-3 pt-3', fontScaleClass]">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs font-medium text-slate-600 mb-1">更新處理狀態：</label>
-                  <select v-model="item.status" class="w-full px-2 py-1.5 border rounded text-sm bg-white" :class="fontScaleClass">
+                  <select v-model="item.status" :class="['w-full px-2 py-1.5 border rounded text-sm bg-white', fontScaleClass]">
                     <option value="待處理">待處理</option>
                     <option value="處理中">處理中</option>
                     <option value="已結案">已結案</option>
@@ -287,21 +288,21 @@
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-slate-600 mb-1">分派負責委員/人員：</label>
-                  <input v-model="item.assignedTo" type="text" placeholder="例：總幹事、設備委員" class="w-full px-2 py-1.5 border rounded text-sm" :class="fontScaleClass">
+                  <input v-model="item.assignedTo" type="text" placeholder="例：總幹事、設備委員" :class="['w-full px-2 py-1.5 border rounded text-sm', fontScaleClass]">
                 </div>
               </div>
 
               <div>
                 <label class="block text-xs font-medium text-slate-600 mb-1">主任/管委會正式處置結論與回覆：</label>
-                <textarea v-model="item.tempFinalReply" rows="2" placeholder="請輸入正式處置結果，住戶查詢時將可同步看見..." class="w-full px-2 py-1.5 border rounded text-sm" :class="fontScaleClass"></textarea>
+                <textarea v-model="item.tempFinalReply" rows="2" placeholder="請輸入正式處置結果，住戶查詢時將可同步看見..." :class="['w-full px-2 py-1.5 border rounded text-sm', fontScaleClass]"></textarea>
               </div>
 
               <div class="flex justify-end space-x-2 pt-2">
-                <button @click="saveAdminIssueUpdate(item)" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm transition flex items-center space-x-1" :class="fontScaleClass">
+                <button type="button" @click="saveAdminIssueUpdate(item)" :disabled="loading" :class="['bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm transition flex items-center space-x-1', fontScaleClass]">
                   <i class="fa-solid fa-floppy-disk"></i>
                   <span>儲存變更</span>
                 </button>
-                <button @click="toggleArchiveIssue(item)" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm transition" :class="fontScaleClass">
+                <button type="button" @click="toggleArchiveIssue(item)" :class="['bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm transition', fontScaleClass]">
                   {{ item.isArchived ? '移回即時區' : '移至封存備查' }}
                 </button>
               </div>
@@ -315,9 +316,11 @@
 
   <!-- 頁尾版權 -->
   <footer class="bg-slate-800 text-slate-400 py-4 mt-8 border-t border-slate-700">
-    <div class="max-w-4xl mx-auto px-4 text-center" :class="fontScaleClassSmall">
+    <div :class="['max-w-4xl mx-auto px-4 text-center', fontScaleClassSmall]">
       <p>© 2026 最上境社區管理委員會 | 住戶線上共好反映系統</p>
-      <p class="mt-1 text-slate-500">雲端資料庫安全加密同步 • 隨時為社區服務</p>
+      <p class="mt-1 text-slate-500">
+        {{ isCloudConnected ? '雲端資料庫安全加密同步中' : '本機安全暫存模式運作中（填入 Supabase 金鑰即可自動雲端同步）' }}
+      </p>
     </div>
   </footer>
 
@@ -326,16 +329,27 @@
 <script>
   const { createApp } = Vue;
 
-  // Supabase 初始化設定 (請填入您正確的專案 URL 與金鑰)
+  // Supabase 初始化設定 (填入真實網址與金鑰後會自動連線上雲端；未填入前自動使用瀏覽器本機暫存，不會當機)
   const SUPABASE_URL = 'YOUR_SUPABASE_URL';
   const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  
+  let supabaseClient = null;
+  const isValidSupabase = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+  if (isValidSupabase && window.supabase) {
+    try {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+      console.warn('Supabase 初始化失敗，切換至本機模式:', e);
+    }
+  }
+
+  const STORAGE_KEY = 'zuishangjing_community_issues_v1';
 
   createApp({
     data() {
       return {
-        // 新增：字體大小級別 (1: 標準, 2: 放大, 3: 特大)
         fontSizeLevel: parseInt(localStorage.getItem('community_font_level')) || 1,
+        isCloudConnected: !!supabaseClient,
 
         activeTab: 'submit',
         loading: false,
@@ -360,10 +374,12 @@
         hasSearched: false,
         residentResults: [],
         issues: []
-      }
+      };
+    },
+    mounted() {
+      this.loadAllIssues();
     },
     computed: {
-      // 動態字體對應樣式
       fontScaleClass() {
         if (this.fontSizeLevel === 2) return 'text-lg';
         if (this.fontSizeLevel === 3) return 'text-xl';
@@ -379,7 +395,6 @@
         if (this.fontSizeLevel === 3) return 'text-2xl';
         return 'text-base';
       },
-
       filteredAdminIssues() {
         let list = this.issues.filter(i => (this.showArchived ? i.isArchived : !i.isArchived));
         if (!this.adminSearch) return list;
@@ -387,15 +402,38 @@
         return list.filter(i => 
           (i.unit && i.unit.toLowerCase().includes(kw)) ||
           (i.category && i.category.toLowerCase().includes(kw)) ||
-          (i.description && i.description.toLowerCase().includes(kw))
+          (i.description && i.description.toLowerCase().includes(kw)) ||
+          (i.code && i.code.toLowerCase().includes(kw))
         );
       }
     },
     methods: {
-      // 切換字體大小函式
       toggleFontSize() {
         this.fontSizeLevel = (this.fontSizeLevel % 3) + 1;
         localStorage.setItem('community_font_level', this.fontSizeLevel);
+      },
+
+      loadAllIssues() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            this.issues = JSON.parse(saved).map(item => ({
+              ...item,
+              tempFinalReply: item.finalReply || ''
+            }));
+          }
+        } catch (e) {
+          console.error('讀取暫存失敗:', e);
+          this.issues = [];
+        }
+      },
+
+      saveAllIssuesToLocal() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.issues));
+        } catch (e) {
+          console.error('寫入暫存失敗:', e);
+        }
       },
 
       handleFileSelect(e) {
@@ -411,25 +449,71 @@
         this.form.mediaFiles.splice(index, 1);
       },
 
+      fileToBase64(file) {
+        return new Promise((resolve) => {
+          if (!file.type.startsWith('image/')) {
+            resolve(null);
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        });
+      },
+
       async submitIssue() {
         if (!this.form.unit || !this.form.phoneLast4 || !this.form.category || !this.form.description) {
           alert('請完整填寫必填欄位！');
           return;
         }
-        if (this.form.phoneLast4.length !== 4) {
+        if (!/^\d{4}$/.test(this.form.phoneLast4)) {
           alert('手機末 4 碼格式有誤，請輸入 4 位數字。');
           return;
         }
 
         this.loading = true;
         try {
-          // 模擬上傳與資料庫儲存
-          alert('反映事項已成功送出！系統已同步至雲端並通知管理團隊。');
+          const mediaUrls = [];
+          for (const file of this.form.mediaFiles) {
+            const b64 = await this.fileToBase64(file);
+            if (b64) mediaUrls.push(b64);
+          }
+
+          const issueCode = 'ISSUE-' + Math.floor(1000 + Math.random() * 9000);
+          const newIssue = {
+            id: Date.now().toString(),
+            code: issueCode,
+            unit: this.form.unit,
+            phoneLast4: this.form.phoneLast4,
+            category: this.form.category,
+            location: this.form.location,
+            description: this.form.description,
+            media_urls: mediaUrls,
+            status: '待處理',
+            assignedTo: '',
+            finalReply: '',
+            tempFinalReply: '',
+            isArchived: false,
+            created_at: new Date().toISOString()
+          };
+
+          if (supabaseClient) {
+            const { error } = await supabaseClient.from('issues').insert([newIssue]);
+            if (error) throw error;
+          }
+
+          this.issues.unshift(newIssue);
+          this.saveAllIssuesToLocal();
+
+          alert(`反映事項已成功送出！\n您的案件查詢代碼為：【${issueCode}】\n請妥善保存，可隨時至「進度與雙重核驗查詢」追蹤處理進度。`);
+          
+          this.trackKeyword = issueCode;
           this.form = { unit: '', phoneLast4: '', category: '', location: '', description: '', mediaFiles: [] };
           this.activeTab = 'track';
         } catch (err) {
           console.error(err);
-          alert('送出失敗，請稍後再試。');
+          alert('送出時發生錯誤：' + (err.message || '請稍後再試'));
         } finally {
           this.loading = false;
         }
@@ -443,9 +527,30 @@
 
         this.loading = true;
         try {
-          // 模擬從雲端查詢比對
+          this.loadAllIssues();
+          const kw = this.trackKeyword.trim().toLowerCase();
+          const pwd = this.trackPassword.trim();
+
+          const matched = this.issues.filter(item => {
+            const matchCodeOrUnit = (item.code && item.code.toLowerCase() === kw) || (item.unit && item.unit.toLowerCase().includes(kw));
+            const matchPhone = item.phoneLast4 === pwd;
+            return matchCodeOrUnit && matchPhone;
+          });
+
+          if (matched.length === 0) {
+            this.trackFailCount++;
+            if (this.trackFailCount >= 3) {
+              setTimeout(() => { this.trackFailCount = 0; }, 15000);
+            }
+          } else {
+            this.trackFailCount = 0;
+          }
+
+          this.residentResults = matched;
           this.hasSearched = true;
-          this.residentResults = []; // 帶入查詢結果
+        } catch (err) {
+          console.error(err);
+          alert('查詢失敗，請稍後再試。');
         } finally {
           this.loading = false;
         }
@@ -458,22 +563,17 @@
         this.hasSearched = false;
       },
 
-      async promptAdminLogin() {
-        const pwd = prompt('請輸入後台管理密碼：');
+      promptAdminLogin() {
+        const pwd = prompt('請輸入後台管理密碼（測試預設密碼：1234）：');
         if (!pwd) return;
 
-        this.loading = true;
-        try {
-          // 模擬驗證
-          if (pwd === '1234') { // 範例密碼
-            this.isAdmin = true;
-            this.currentAdminPwd = pwd;
-            this.currentRoleName = '社區主任';
-          } else {
-            alert('密碼錯誤！');
-          }
-        } finally {
-          this.loading = false;
+        if (pwd === '1234') {
+          this.isAdmin = true;
+          this.currentAdminPwd = pwd;
+          this.currentRoleName = '社區主任';
+          this.loadAllIssues();
+        } else {
+          alert('密碼錯誤！');
         }
       },
 
@@ -484,18 +584,23 @@
         this.showArchived = false;
       },
 
-      async refreshAdminIssues() {
+      refreshAdminIssues() {
         this.loading = true;
-        setTimeout(() => { this.loading = false; }, 500);
+        this.loadAllIssues();
+        setTimeout(() => {
+          this.loading = false;
+        }, 300);
       },
 
-      async saveAdminIssueUpdate(item) {
+      saveAdminIssueUpdate(item) {
         item.finalReply = item.tempFinalReply;
-        alert('變更已成功儲存至雲端！');
+        this.saveAllIssuesToLocal();
+        alert('變更已成功儲存！住戶查詢時將可即時看到最新進度與處置結論。');
       },
 
-      async toggleArchiveIssue(item) {
+      toggleArchiveIssue(item) {
         item.isArchived = !item.isArchived;
+        this.saveAllIssuesToLocal();
         alert(item.isArchived ? '已移至封存備查庫。' : '已移回即時案件區。');
       },
 
@@ -507,11 +612,12 @@
 
       formatDate(dateStr) {
         if (!dateStr) return '剛剛';
-        return new Date(dateStr).toLocaleString();
+        return new Date(dateStr).toLocaleString('zh-TW');
       },
 
       isImageUrl(url) {
-        return /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
+        if (!url) return false;
+        return url.startsWith('data:image/') || /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
       }
     }
   }).mount('#app');

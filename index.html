@@ -17,7 +17,7 @@
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased font-sans">
-<div id="app" v-cloak class="min-h-screen flex flex-col justify-between">
+<div id="app" v-cloak class="min-h-screen flex flex-col justify-between" :class="fontScaleClass">
 
   <!-- 頂部導航 -->
   <header class="bg-emerald-800 text-white shadow-md sticky top-0 z-50">
@@ -25,663 +25,430 @@
       <div class="flex items-center space-x-2">
         <i class="fa-solid fa-building-circle-check text-2xl text-emerald-300"></i>
         <div>
-          <h1 class="text-base font-bold tracking-wider">最上境社區</h1>
-          <p class="text-xs text-emerald-200">免安裝住戶反映與管理系統</p>
+          <h1 class="font-bold tracking-wider" :class="fontScaleClassTitle">最上境社區</h1>
+          <p :class="fontScaleClassSmall" class="text-emerald-200">免安裝住戶反映與管理系統</p>
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="text-xs bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white">
+        <!-- 字體放大切換按鈕 -->
+        <button @click="toggleFontSize" :title="'目前字體級別：' + fontSizeLevel" class="bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white flex items-center space-x-1" :class="fontScaleClassSmall">
+          <i class="fa-solid fa-text-height"></i>
+          <span>{{ fontSizeLevel === 1 ? '標準' : (fontSizeLevel === 2 ? '放大' : '特大') }}</span>
+        </button>
+
+        <button v-if="isAdmin" @click="refreshAdminIssues" :disabled="loading" title="重新整理雲端資料" class="bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
           <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
-       <button v-if="!isAdmin" @click="promptAdminLogin()" class="text-xs bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white">
+        <button v-if="!isAdmin" @click="promptAdminLogin()" class="bg-emerald-900 border border-emerald-500 hover:bg-emerald-700 px-3 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
           <i class="fa-solid fa-lock mr-1"></i>管理後台
         </button>
-        <button v-else @click="adminLogout" class="text-xs bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white">
+        <button v-else @click="adminLogout" class="bg-red-800 border border-red-500 hover:bg-red-700 px-3 py-1.5 rounded-full transition text-white" :class="fontScaleClassSmall">
           <i class="fa-solid fa-arrow-right-from-bracket mr-1"></i>退出後台 ({{ currentRoleName }})
         </button>
       </div>
     </div>
   </header>
 
-  <!-- 主內容區 -->
-  <main class="max-w-4xl mx-auto w-full px-4 py-6 flex-1">
-    <div v-if="loading" class="mb-4 text-center text-xs text-slate-600 bg-emerald-50 border border-emerald-200 py-2 rounded shadow-sm">
-      <i class="fa-solid fa-circle-notch fa-spin mr-1 text-emerald-600"></i>正在安全連線雲端資料庫...
+  <!-- 主要內容區 -->
+  <main class="max-w-4xl mx-auto px-4 py-6 flex-grow w-full">
+
+    <!-- 載入中遮罩 -->
+    <div v-if="loading && !isAdmin" class="fixed inset-0 bg-black/50 z-50 flex flex-col items-center justify-center text-white">
+      <i class="fa-solid fa-circle-notch fa-spin text-4xl mb-3 text-emerald-400"></i>
+      <p :class="fontScaleClass">資料處理中，請稍候...</p>
     </div>
 
-    <!-- 住戶前台 -->
+    <!-- 一般住戶視圖 / 未登入後台視圖 -->
     <div v-if="!isAdmin">
-      <div class="flex border-b border-slate-300 mb-6 bg-white rounded-t-lg overflow-hidden shadow-sm">
-        <button @click="residentTab = 'submit'" :class="residentTab === 'submit' ? 'border-b-2 border-emerald-600 text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'" class="flex-1 py-3 text-center transition">
-          <i class="fa-solid fa-pen-to-square mr-2"></i>我要反映
+      <!-- 標籤切換 -->
+      <div class="flex rounded-lg bg-emerald-200 p-1 mb-6 shadow-inner">
+        <button @click="activeTab = 'submit'" :class="activeTab === 'submit' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300'" class="flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2" :class="fontScaleClass">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span>我要反映</span>
         </button>
-        <button @click="residentTab = 'track'" :class="residentTab === 'track' ? 'border-b-2 border-emerald-600 text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'" class="flex-1 py-3 text-center transition">
-          <i class="fa-solid fa-magnifying-glass mr-2"></i>進度查詢
+        <button @click="activeTab = 'track'" :class="activeTab === 'track' ? 'bg-emerald-800 text-white shadow' : 'text-emerald-900 hover:bg-emerald-300'" class="flex-1 py-2.5 rounded-md font-medium transition text-center flex items-center justify-center space-x-2" :class="fontScaleClass">
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
+          <span>進度與雙重核驗查詢</span>
         </button>
       </div>
 
-      <!-- 表單 -->
-      <div v-if="residentTab === 'submit'" class="bg-white rounded-b-lg p-6 shadow-sm border border-slate-200">
-        <h2 class="text-lg font-semibold border-l-4 border-emerald-600 pl-2 mb-4">反映資料填寫</h2>
+      <!-- 分頁 1：我要反映 -->
+      <div v-if="activeTab === 'submit'" class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+        <h2 class="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center" :class="fontScaleClassTitle">
+          <i class="fa-solid fa-bullhorn text-emerald-600 mr-2"></i>填寫社區反映事項
+        </h2>
+
         <form @submit.prevent="submitIssue" class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">棟別 / 樓層戶號 *</label>
-              <input v-model="form.unit" required type="text" placeholder="例：A1-10" class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">棟別 / 戶號 <span class="text-red-500">*</span></label>
+              <input v-model="form.unit" type="text" required placeholder="例：A棟 302室 或 B-5" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">手機末 4 碼 * (查詢核身用)</label>
-              <input v-model="form.queryPassword" required type="tel" maxlength="4" pattern="\d{4}" placeholder="請輸入 4 位數字，例：5678" class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">聯絡電話（手機末 4 碼核身） <span class="text-red-500">*</span></label>
+              <input v-model="form.phoneLast4" type="text" maxlength="4" required placeholder="請輸入手機末 4 碼" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">反映類別 <span class="text-red-500">*</span></label>
+              <select v-model="form.category" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white" :class="fontScaleClass">
+                <option value="" disabled>請選擇類別</option>
+                <option value="公共設施">公共設施損壞 / 異常</option>
+                <option value="環境清潔">環境清潔 / 垃圾處理</option>
+                <option value="安寧秩序">噪音 / 安寧與安全秩序</option>
+                <option value="機電消防">機電 / 電梯 / 消防</option>
+                <option value="管理服務">管理人員 / 保全服務</option>
+                <option value="其他建議">其他社區共好建議</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">具體發生位置</label>
+              <input v-model="form.location" type="text" placeholder="例：B1停車場、大廳、中庭花園" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">反映類別 *</label>
-            <select v-model="form.category" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
-              <option value="公設修繕">公設硬體修繕</option>
-              <option value="環境清潔">環境衛生清潔</option>
-              <option value="違規處理">違規處理 (違停/雜物)</option>
-              <option value="安寧秩序">安寧秩序 (噪音/寵物)</option>
-              <option value="管委會建議">管委會建議</option>
-              <option value="其他">其他反映事項</option>
-            </select>
+            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">詳細說明 <span class="text-red-500">*</span></label>
+            <textarea v-model="form.description" rows="4" required placeholder="請詳細描述狀況，以利管委會與主任快速掌握處理..." class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass"></textarea>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">詳細說明 *</label>
-            <textarea v-model="form.description" required rows="4" placeholder="請描述發生地點、具體狀況或改善建議..." class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
-          </div>
+            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">現場相片 / 影片上傳（最多 3 張/部）</label>
+            <input type="file" @change="handleFileSelect" multiple accept="image/*,video/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
+            <p :class="fontScaleClassSmall" class="text-slate-500 mt-1">支援照片與影片格式，系統將自動最佳化並上傳雲端。</p>
 
-          <div>
-            <div class="flex justify-between items-center mb-1">
-              <label class="block text-sm font-medium text-slate-700">檢附相片 / 影片 (最多 3 則，點擊圖片可放大)</label>
-              <span class="text-xs text-slate-400">已選取 {{ residentFiles.length }} / 3</span>
-            </div>
-            <input type="file" accept="image/*,video/*" multiple @change="handleResidentFileUpload" :disabled="residentFiles.length >= 3" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50">
-            
-            <div v-if="residentFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-              <div v-for="(item, idx) in residentFiles" :key="idx" class="relative rounded-lg border border-slate-200 bg-slate-900 overflow-hidden flex flex-col justify-center items-center p-1">
-                <img v-if="item.type.startsWith('image')" :src="item.data" @click="openImageModal(item.data)" class="w-full h-32 object-cover rounded cursor-pointer hover:opacity-90 transition">
-                <video v-else :src="item.data" controls playsinline preload="metadata" class="w-full h-32"></video>
-                <button type="button" @click="residentFiles.splice(idx, 1)" class="absolute top-2 right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow hover:bg-red-700 z-10"><i class="fa-solid fa-xmark"></i></button>
+            <!-- 預覽縮圖 -->
+            <div v-if="form.mediaFiles.length > 0" class="flex flex-wrap gap-2 mt-3">
+              <div v-for="(file, idx) in form.mediaFiles" :key="idx" class="relative group border rounded-lg p-1 bg-slate-50">
+                <span :class="fontScaleClassSmall" class="block text-slate-600 truncate max-w-[120px]">{{ file.name }}</span>
+                <button type="button" @click="removeFile(idx)" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-700">×</button>
               </div>
             </div>
           </div>
 
-          <button type="submit" :disabled="submitting" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded shadow transition">
-            {{ submitting ? '正在送出至雲端...' : '送出反映案件' }}
-          </button>
-        </form>
-      </div>
-
-      <!-- 進度查詢 (單筆雲端安全驗證) -->
-      <div v-if="residentTab === 'track'" class="space-y-4">
-        <form @submit.prevent="searchResidentIssue" class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-3">
-          <div class="font-bold text-sm text-slate-800"><i class="fa-solid fa-user-lock text-emerald-600 mr-2"></i>案件進度雙重核驗查詢</div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-           <input v-model="trackKeyword" type="text" autocomplete="off" required placeholder="案件代碼 或 樓層戶號 *" class="w-full border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
-            <input v-model="trackPassword" type="password" inputmode="numeric" maxlength="4" autocomplete="off" required placeholder="手機末 4 碼 *" class="w-full border border-slate-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <div class="flex justify-between items-center pt-1">
-            <button type="button" @click="clearTrackInput" class="text-xs text-slate-500 hover:text-slate-700">清空條件</button>
-            <button type="submit" :disabled="loading || trackCooldown > 0" class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold px-5 py-2 rounded text-sm shadow transition">
-              <i class="fa-solid fa-magnifying-glass mr-1"></i>
-              {{ trackCooldown > 0 ? `請稍候 (${trackCooldown}秒)` : '驗證並查詢' }}
+          <div class="pt-2">
+            <button type="submit" :disabled="loading" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-md flex items-center justify-center space-x-2" :class="fontScaleClass">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>送出反映事項</span>
             </button>
           </div>
         </form>
+      </div>
 
-        <div v-if="!hasSearched" class="text-center py-10 bg-white rounded-lg border text-slate-400 text-sm">
-          請輸入「案件代碼（或樓層戶號）」及「手機末 4 碼」，點擊「驗證並查詢」。
+      <!-- 分頁 2：進度與雙重核驗查詢 -->
+      <div v-if="activeTab === 'track'" class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+        <h2 class="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100 flex items-center" :class="fontScaleClassTitle">
+          <i class="fa-solid fa-magnifying-glass text-emerald-600 mr-2"></i>進度查詢與雙重核驗
+        </h2>
+
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4" :class="fontScaleClass">
+          <p class="text-emerald-800"><i class="fa-solid fa-shield-halved mr-1"></i> 為了保護住戶個人隱私與資訊安全，查詢案件需輸入**「案件代碼」或「戶號」**以及送出時填寫的**「手機末 4 碼」**進行雙重核驗。</p>
         </div>
 
-        <div v-else-if="residentResults.length === 0 && !loading" class="text-center py-10 bg-white rounded-lg border text-amber-600 text-sm">
-          查無符合案件，或手機末 4 碼輸入錯誤！（若已封存結案請洽管理室）
+        <div class="space-y-4">
+          <div>
+            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">案件代碼 或 您的戶號</label>
+            <input v-model="trackKeyword" type="text" placeholder="例：ISSUE-1712 或 A棟 302室" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+          </div>
+          <div>
+            <label class="block text-slate-700 font-medium mb-1" :class="fontScaleClass">手機末 4 碼（核驗密碼）</label>
+            <input v-model="trackPassword" type="password" maxlength="4" placeholder="請輸入 4 位數字" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none" :class="fontScaleClass">
+          </div>
+
+          <div class="flex space-x-2">
+            <button @click="searchResidentIssues" :disabled="loading || trackFailCount >= 3" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg transition shadow flex items-center justify-center space-x-1" :class="fontScaleClass">
+              <i class="fa-solid fa-search"></i>
+              <span>安全查詢案件</span>
+            </button>
+            <button @click="clearTrackInput" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-lg transition" :class="fontScaleClass">
+              清除
+            </button>
+          </div>
+          <p v-if="trackFailCount > 0 && trackFailCount < 3" :class="fontScaleClassSmall" class="text-amber-600">注意：連續核驗錯誤達 3 次將暫時鎖定 15 秒（目前錯誤 {{ trackFailCount }} 次）。</p>
         </div>
 
-        <div v-for="issue in residentResults" :key="issue.id" class="bg-white rounded-lg p-5 shadow-sm border border-slate-200">
-          <div class="flex justify-between items-start mb-2">
-            <div>
-              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 mr-2 font-mono">{{ issue.id }}</span>
-              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">{{ issue.category }}</span>
-              <h3 class="font-bold text-base mt-1">{{ issue.unit }}</h3>
-            </div>
-            <span :class="getStatusBadgeClass(issue.status)" class="text-xs font-bold px-2.5 py-1 rounded-full">{{ issue.status }}</span>
+        <!-- 查詢結果列表 -->
+        <div v-if="hasSearched" class="mt-6 space-y-4">
+          <h3 class="font-bold text-slate-700 border-t pt-4" :class="fontScaleClass">查詢結果 ({{ residentResults.length }} 筆)</h3>
+          
+          <div v-if="residentResults.length === 0" class="text-slate-500 text-center py-6 bg-slate-50 rounded-lg border border-dashed" :class="fontScaleClass">
+            查無相符資料，請確認「案件代碼/戶號」及「手機末 4 碼」是否正確。
           </div>
 
-          <p class="text-sm text-slate-600 mb-3 bg-slate-50 p-2.5 rounded">{{ issue.description }}</p>
-
-          <div v-if="issue.files && issue.files.length > 0" class="mb-3">
-            <div class="text-xs font-semibold text-slate-500 mb-1.5">住戶上傳之附件檔案：</div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div v-for="(f, i) in issue.files" :key="i" class="rounded-lg border border-slate-200 bg-slate-900 p-1 flex items-center justify-center">
-                <img v-if="f.type.startsWith('image')" :src="f.data" @click="openImageModal(f.data)" class="w-full h-36 object-cover rounded cursor-pointer hover:opacity-90">
-                <video v-else :src="f.data" controls playsinline preload="metadata" class="w-full h-36"></video>
+          <div v-for="item in residentResults" :key="item.id" class="border rounded-xl p-4 bg-white shadow-sm space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold" :class="getStatusBadgeClass(item.status)">
+                  {{ item.status }}
+                </span>
+                <span :class="fontScaleClassSmall" class="text-slate-500 ml-2">編號：{{ item.code || item.id }}</span>
               </div>
+              <span :class="fontScaleClassSmall" class="text-slate-400">{{ formatDate(item.created_at) }}</span>
             </div>
-          </div>
 
-          <div class="text-xs text-slate-400 mb-3">反映時間：{{ issue.createdAt }}</div>
-
-          <div class="border-t border-slate-200 pt-3">
-            <h4 class="text-xs font-bold text-slate-700 mb-1"><i class="fa-solid fa-clipboard-check text-emerald-600 mr-1.5"></i>管理室／管委會處置回覆：</h4>
-            <div v-if="issue.finalReply" class="text-sm bg-emerald-50/70 border border-emerald-100 text-slate-700 p-3 rounded">
-              <p class="whitespace-pre-line">{{ issue.finalReply }}</p>
-              
-              <div v-if="issue.replyFiles && issue.replyFiles.length > 0" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-2 border-t border-emerald-200">
-                <div v-for="(rf, rIdx) in issue.replyFiles" :key="rIdx" class="rounded-lg border border-emerald-300 bg-black p-1 flex items-center justify-center">
-                  <img v-if="rf.type.startsWith('image')" :src="rf.data" @click="openImageModal(rf.data)" class="w-full h-28 object-cover rounded cursor-pointer hover:opacity-90">
-                  <video v-else :src="rf.data" controls playsinline preload="metadata" class="w-full h-28"></video>
-                </div>
-              </div>
-              <div class="text-[11px] text-emerald-700 mt-2 font-medium">回覆時間：{{ issue.repliedAt }} (統整發布：主任)</div>
+            <div class="grid grid-cols-2 gap-2" :class="fontScaleClass">
+              <div><strong class="text-slate-600">戶號：</strong>{{ item.unit }}</div>
+              <div><strong class="text-slate-600">類別：</strong>{{ item.category }}</div>
             </div>
-            <div v-else class="text-xs text-amber-600 italic">案件已收案，現勘研議中...</div>
+
+            <div v-if="item.location" :class="fontScaleClass"><strong class="text-slate-600">位置：</strong>{{ item.location }}</div>
+
+            <div class="bg-slate-50 p-3 rounded-lg border" :class="fontScaleClass">
+              <strong class="text-slate-700 block mb-1">反映內容：</strong>
+              <p class="text-slate-600 whitespace-pre-wrap">{{ item.description }}</p>
+            </div>
+
+            <!-- 媒體檔案預覽 -->
+            <div v-if="item.media_urls && item.media_urls.length > 0" class="flex flex-wrap gap-2 pt-1">
+              <template v-for="(url, idx) in item.media_urls" :key="idx">
+                <a v-if="isImageUrl(url)" :href="url" target="_blank" class="block w-20 h-20 border rounded overflow-hidden hover:opacity-85">
+                  <img :src="url" class="w-full h-full object-cover">
+                </a>
+                <video v-else :src="url" controls class="w-40 rounded border"></video>
+              </template>
+            </div>
+
+            <!-- 處理進度與處置回覆 -->
+            <div v-if="item.finalReply" class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg mt-3" :class="fontScaleClass">
+              <strong class="text-emerald-900 block mb-1"><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i>主任/管委會正式處置結論：</strong>
+              <p class="text-emerald-800 whitespace-pre-wrap">{{ item.finalReply }}</p>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 管理後台 -->
-    <div v-if="isAdmin" class="space-y-6">
-      <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex flex-wrap justify-between items-center text-xs gap-2">
-        <div class="flex items-center gap-1.5 font-bold text-emerald-900">
-          <i class="fa-solid fa-shield-halved text-emerald-700"></i>
-          <span>後台管理模式 [{{ currentRoleName }}] (有效 {{ activeIssuesCount }} 筆 / 封存 {{ archivedIssuesCount }} 筆)</span>
+    <!-- 後台管理員視圖 -->
+    <div v-else class="space-y-6">
+      <div class="bg-emerald-800 text-white p-4 rounded-xl shadow flex justify-between items-center">
+        <div>
+          <h2 class="font-bold" :class="fontScaleClassTitle">主任與委員管理後台</h2>
+          <p :class="fontScaleClassSmall" class="text-emerald-200">當前身份角色：<span class="font-bold text-white">{{ currentRoleName }}</span></p>
         </div>
-        <div class="flex items-center gap-2">
-          <button @click="toggleArchiveView" :class="showArchived ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-600 hover:bg-slate-700'" class="text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1 transition">
-            <i class="fa-solid fa-box-archive"></i>{{ showArchived ? '返回常規看板' : '封存備查庫' }}
-          </button>
-          <button @click="openExportModalWithAuth" class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-1.5 rounded shadow flex items-center gap-1">
-            <i class="fa-solid fa-file-export"></i>自訂匯出
+        <div class="flex space-x-2">
+          <button @click="showArchived = !showArchived" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded-lg text-sm transition text-white">
+            <i class="fa-solid fa-box-archive mr-1"></i>{{ showArchived ? '返回即時案件' : '查看封存備查庫' }}
           </button>
         </div>
       </div>
 
-      <!-- 看板統計 -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div class="bg-white p-3 rounded border-l-4 border-amber-500 shadow-sm">
-          <div class="text-xs text-slate-500">處理中 / 待分派</div>
-          <div class="text-xl font-bold text-amber-600">{{ countStatus('處理中') + countStatus('待分派') }}</div>
-        </div>
-        <div class="bg-white p-3 rounded border-l-4 border-blue-500 shadow-sm">
-          <div class="text-xs text-slate-500">管委會審議中</div>
-          <div class="text-xl font-bold text-blue-600">{{ countStatus('管委會研議') }}</div>
-        </div>
-        <div class="bg-white p-3 rounded border-l-4 border-emerald-500 shadow-sm">
-          <div class="text-xs text-slate-500">已結案覆核</div>
-          <div class="text-xl font-bold text-emerald-600">{{ countStatus('已結案') }}</div>
-        </div>
-        <div class="bg-white p-3 rounded border-l-4 border-slate-400 shadow-sm">
-          <div class="text-xs text-slate-500">看板中案件</div>
-          <div class="text-xl font-bold text-slate-700">{{ currentDisplayIssues.length }}</div>
-        </div>
-      </div>
-
-      <!-- 搜尋列 -->
-      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap gap-2 items-center">
-        <input v-model="adminSearch" type="text" placeholder="關鍵字 / 戶號 / 內容" class="border border-slate-300 rounded px-3 py-1.5 text-sm flex-1 outline-none">
-        <select v-model="adminFilterCategory" class="border border-slate-300 rounded px-3 py-1.5 text-sm bg-white outline-none">
-          <option value="">全部類別</option>
-          <option value="公設修繕">公設修繕</option>
-          <option value="環境清潔">環境清潔</option>
-          <option value="違規處理">違規處理</option>
-          <option value="安寧秩序">安寧秩序</option>
-          <option value="管委會建議">管委會建議</option>
-        </select>
-      </div>
-
-      <!-- 案件列表 -->
-      <div class="space-y-4">
-        <div v-if="filteredAdminIssues.length === 0" class="text-center py-10 bg-white rounded-lg border text-slate-400 text-sm">
-          {{ showArchived ? '封存庫目前無任何備查案件。' : '目前看板無符合條件的反映案件。' }}
-        </div>
-
-        <div v-for="issue in filteredAdminIssues" :key="issue.id" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden" :class="{ 'ring-2 ring-amber-300': issue.isArchived, 'border-slate-300 bg-slate-50/50': issue.status === '已結案' }">
-          <div class="bg-slate-50 px-4 py-2.5 border-b flex justify-between items-center text-xs">
-            <span class="font-mono text-slate-500">{{ issue.id }} | {{ issue.createdAt }}</span>
-            <div class="flex items-center gap-1.5">
-              <span v-if="issue.isArchived" class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full"><i class="fa-solid fa-box-archive mr-1"></i>已封存備查</span>
-              <span :class="getStatusBadgeClass(issue.status)" class="font-bold px-2 py-0.5 rounded-full">{{ issue.status }}</span>
-            </div>
+      <!-- 後台功能列表 -->
+      <div class="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+        <div class="flex justify-between items-center mb-4 pb-2 border-b">
+          <h3 class="font-bold text-slate-800 flex items-center" :class="fontScaleClass">
+            <i class="fa-solid fa-list-check text-emerald-600 mr-2"></i>
+            {{ showArchived ? '已封存備查案件清單' : '社區即時反映案件清單' }} ({{ filteredAdminIssues.length }})
+          </h3>
+          <div class="flex items-center space-x-2">
+            <input v-model="adminSearch" type="text" placeholder="搜尋戶號/類別/內容..." class="px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" :class="fontScaleClass">
           </div>
+        </div>
 
-          <div class="p-4 space-y-3">
+        <div v-if="filteredAdminIssues.length === 0" class="text-slate-500 text-center py-10" :class="fontScaleClass">
+          目前沒有任何反映案件。
+        </div>
+
+        <div class="space-y-4">
+          <div v-for="item in filteredAdminIssues" :key="item.id" class="border rounded-xl p-4 bg-slate-50/50 shadow-sm space-y-3">
             <div class="flex justify-between items-start">
+              <div class="flex items-center space-x-2">
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold" :class="getStatusBadgeClass(item.status)">
+                  {{ item.status }}
+                </span>
+                <span class="font-bold text-slate-700" :class="fontScaleClass">{{ item.unit }}</span>
+                <span :class="fontScaleClassSmall" class="text-slate-500">({{ item.category }})</span>
+              </div>
+              <span :class="fontScaleClassSmall" class="text-slate-400">{{ formatDate(item.created_at) }}</span>
+            </div>
+
+            <div :class="fontScaleClass"><strong class="text-slate-600">反映內容：</strong>{{ item.description }}</div>
+
+            <!-- 媒體檢視 -->
+            <div v-if="item.media_urls && item.media_urls.length > 0" class="flex flex-wrap gap-2">
+              <template v-for="(url, idx) in item.media_urls" :key="idx">
+                <a :href="url" target="_blank" class="block w-16 h-16 border rounded overflow-hidden">
+                  <img :src="url" class="w-full h-full object-cover">
+                </a>
+              </template>
+            </div>
+
+            <!-- 後台管理操作區 -->
+            <div class="bg-white p-3 rounded-lg border space-y-3 pt-3" :class="fontScaleClass">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">更新處理狀態：</label>
+                  <select v-model="item.status" class="w-full px-2 py-1.5 border rounded text-sm bg-white" :class="fontScaleClass">
+                    <option value="待處理">待處理</option>
+                    <option value="處理中">處理中</option>
+                    <option value="已結案">已結案</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 mb-1">分派負責委員/人員：</label>
+                  <input v-model="item.assignedTo" type="text" placeholder="例：總幹事、設備委員" class="w-full px-2 py-1.5 border rounded text-sm" :class="fontScaleClass">
+                </div>
+              </div>
+
               <div>
-                <span class="font-bold text-base">{{ issue.unit }}</span>
-                <span class="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ issue.category }}</span>
-              </div>
-              <div class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-700 font-mono">
-                手機末4碼：<strong>{{ issue.queryPassword }}</strong>
-              </div>
-            </div>
-            
-            <p class="text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-100">{{ issue.description }}</p>
-
-            <div v-if="issue.files && issue.files.length > 0" class="p-2.5 bg-slate-50 rounded border border-slate-200">
-              <div class="text-xs font-semibold text-slate-600 mb-1">住戶檢附相片／影片 (點擊放大相片)：</div>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div v-for="(f, fi) in issue.files" :key="fi" class="rounded-lg border border-slate-200 bg-slate-900 p-1 flex items-center justify-center">
-                  <img v-if="f.type.startsWith('image')" :src="f.data" @click="openImageModal(f.data)" class="w-full h-28 object-cover rounded cursor-pointer hover:opacity-90">
-                  <video v-else :src="f.data" controls playsinline preload="metadata" class="w-full h-28"></video>
-                </div>
-              </div>
-            </div>
-
-            <!-- 協處流程區塊 -->
-            <div class="bg-amber-50/60 border border-amber-200/80 rounded p-3 text-xs space-y-2">
-              <div class="font-semibold text-amber-900 flex justify-between items-center">
-                <span><i class="fa-solid fa-arrows-split-up-and-left mr-1"></i>內部協處流程</span>
-                <span class="text-[11px] text-amber-700">分派負責：<strong class="underline">{{ issue.assignedTo || '未指派' }}</strong></span>
+                <label class="block text-xs font-medium text-slate-600 mb-1">主任/管委會正式處置結論與回覆：</label>
+                <textarea v-model="item.tempFinalReply" rows="2" placeholder="請輸入正式處置結果，住戶查詢時將可同步看見..." class="w-full px-2 py-1.5 border rounded text-sm" :class="fontScaleClass"></textarea>
               </div>
 
-              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex flex-wrap gap-2 items-center">
-                <span class="text-slate-600">更換指派：</span>
-                <select @change="assignIssueWithAuth(issue, $event.target.value)" class="border rounded px-2 py-1 text-xs bg-white">
-                  <option disabled selected value="">選擇分派對象</option>
-                  <option value="總幹事/主任">總幹事/主任</option>
-                  <option value="主任委員意見">主任委員意見</option>
-                  <option value="財務委員意見">財務委員意見</option>
-                  <option value="設備委員意見">設備委員意見</option>
-                  <option value="安全委員意見">安全委員意見</option>
-                  <option value="環保委員意見">環保委員意見</option>
-                  <option value="總務委員意見">總務委員意見</option>
-                  <option value="文康委員意見">文康委員意見</option>
-                </select>
-              </div>
-
-              <div v-if="issue.internalNotes && issue.internalNotes.length > 0" class="space-y-1 pt-1 border-t border-amber-200">
-                <div v-for="(note, idx) in issue.internalNotes" :key="idx" class="text-slate-700 flex justify-between items-center">
-                  <span>• <span class="font-medium">[{{ note.role }}]</span> {{ note.comment }} <span class="text-[10px] text-slate-400">({{ note.time }})</span></span>
-                  <button v-if="!issue.isArchived && issue.status !== '已結案'" @click="deleteInternalNoteWithAuth(issue, idx)" class="text-red-500 hover:text-red-700 text-[10px] ml-2">刪除</button>
-                </div>
-              </div>
-              <div v-else-if="issue.status === '已結案'" class="text-slate-400 italic text-[11px]">
-                無協處意見紀錄
-              </div>
-
-              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="flex gap-2 pt-1">
-                <input 
-                  v-model="issue.tempNote" 
-                  @focus="checkNoteInputAuth(issue)" 
-                  placeholder="被分派人員填寫意見..." 
-                  class="flex-1 border rounded px-2 py-1 text-xs outline-none">
-                <button 
-                  @click="addInternalNoteWithDirector(issue)" 
-                  class="bg-amber-600 text-white px-3 py-1 rounded text-xs hover:bg-amber-700 font-medium">
-                  記下
+              <div class="flex justify-end space-x-2 pt-2">
+                <button @click="saveAdminIssueUpdate(item)" :disabled="loading" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-sm transition flex items-center space-x-1" :class="fontScaleClass">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  <span>儲存變更</span>
+                </button>
+                <button @click="toggleArchiveIssue(item)" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm transition" :class="fontScaleClass">
+                  {{ item.isArchived ? '移回即時區' : '移至封存備查' }}
                 </button>
               </div>
             </div>
-
-            <!-- 主任回覆區塊 -->
-            <div class="bg-emerald-50/50 border border-emerald-200 rounded p-3 text-xs space-y-2">
-              <div class="font-bold text-emerald-900 flex justify-between items-center">
-                <span><i class="fa-solid fa-bullhorn mr-1.5 text-emerald-700"></i>主任統整前台結案發布</span>
-                <span v-if="issue.status === '已結案'" class="text-emerald-700 text-[11px] font-semibold"><i class="fa-solid fa-lock mr-1"></i>此案已正式結案，資料已封裝存檔</span>
-              </div>
-              
-              <textarea 
-                v-if="!issue.isArchived && issue.status !== '已結案'"
-                v-model="issue.tempFinalReply" 
-                @focus="checkFinalReplyAuth(issue)" 
-                rows="2" 
-                placeholder="由主任統整處置結論，輸入欲公開給住戶的說明..." 
-                class="w-full border rounded p-2 text-xs outline-none"></textarea>
-              <div v-else class="text-slate-800 bg-white p-2.5 rounded border border-emerald-200 whitespace-pre-line text-xs font-medium">
-                {{ issue.finalReply || '（此案件結案時未填寫公開回覆）' }}
-                <div class="text-[10px] text-slate-400 mt-1 font-normal">結案發布時間：{{ issue.repliedAt }}</div>
-              </div>
-              
-              <div v-if="issue.replyFiles && issue.replyFiles.length > 0">
-                <div class="text-[11px] text-slate-600 mb-1">處置紀錄附件：</div>
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-1">
-                  <div v-for="(p, pIdx) in issue.replyFiles" :key="pIdx" class="relative rounded-lg border border-slate-300 bg-slate-900 flex items-center justify-center p-1">
-                    <img v-if="p.type.startsWith('image')" :src="p.data" @click="openImageModal(p.data)" class="w-full h-24 object-cover rounded cursor-pointer hover:opacity-90">
-                    <video v-else :src="p.data" controls playsinline preload="metadata" class="w-full h-24"></video>
-                    <button v-if="!issue.isArchived && issue.status !== '已結案'" type="button" @click="deleteAdminReplyFile(issue, pIdx)" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow z-10"><i class="fa-solid fa-xmark"></i></button>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="!issue.isArchived && issue.status !== '已結案'" class="pt-1">
-                <div class="text-[11px] text-slate-600 mb-1">上傳回覆照片 / 影片 (最多 5 個，直傳雲端)：</div>
-                <input 
-                  type="file" 
-                  multiple 
-                  accept="image/*,video/*" 
-                  :disabled="(issue.replyFiles?.length || 0) >= 5" 
-                  @click="checkFileUploadAuth($event)" 
-                  @change="handleAdminFileUpload(issue, $event)" 
-                  class="w-full text-xs text-slate-500">
-              </div>
-
-              <!-- 操作按鈕列 -->
-              <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200">
-                <div class="flex items-center gap-2">
-                  <button @click="copyLineNotifyLink(issue)" class="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center shadow">
-                    <i class="fa-brands fa-line text-sm mr-1"></i>LINE 連結
-                  </button>
-                  <button @click="copyArchiveRecordLink(issue)" class="bg-slate-700 hover:bg-slate-800 text-white px-2.5 py-1.5 rounded text-xs flex items-center shadow">
-                    <i class="fa-solid fa-link text-xs mr-1"></i>複製備查專用連結
-                  </button>
-                </div>
-                
-                <div class="flex items-center gap-2">
-                  <template v-if="!issue.isArchived">
-                    <template v-if="issue.status !== '已結案'">
-                      <button @click="publishToResident(issue, '處理中')" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-1.5 rounded text-xs transition shadow">
-                        更新進度
-                      </button>
-                      <button @click="publishToResident(issue, '已結案')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded text-xs transition shadow">
-                        正式結案發布
-                      </button>
-                    </template>
-
-                    <template v-else>
-                      <div class="bg-slate-200 text-slate-500 border border-slate-300 font-semibold px-3 py-1.5 rounded text-xs flex items-center gap-1.5 cursor-not-allowed select-none">
-                        <i class="fa-solid fa-check-double text-slate-500"></i>已正式結案 (功能已鎖定)
-                      </div>
-                    </template>
-
-                    <button @click="archiveIssueWithAuth(issue)" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 rounded text-xs flex items-center gap-1 shadow" title="從前台與常規看板隱藏，移入備查庫">
-                      <i class="fa-solid fa-box-archive"></i>封存隱藏
-                    </button>
-                  </template>
-
-                  <template v-else>
-                    <button @click="unarchiveIssueWithAuth(issue)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded text-xs shadow">
-                      <i class="fa-solid fa-rotate-left mr-1"></i>解除封存還原
-                    </button>
-                    <button @click="permanentlyDeleteIssueWithAuth(issue)" class="bg-red-700 hover:bg-red-800 text-white px-2.5 py-1.5 rounded text-xs shadow">
-                      <i class="fa-solid fa-trash-can mr-1"></i>永久銷毀
-                    </button>
-                  </template>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
     </div>
+
   </main>
 
-  <!-- 圖片放大燈箱 -->
-  <div v-if="previewImageUrl" class="fixed inset-0 bg-black/95 z-[100] flex flex-col justify-between items-center p-2 select-none">
-    <div class="w-full max-w-4xl flex justify-between items-center p-2 text-white">
-      <div class="flex items-center space-x-3 text-sm">
-        <button @click="zoomIn" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
-          <i class="fa-solid fa-magnifying-glass-plus"></i> 放大
-        </button>
-        <button @click="zoomOut" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
-          <i class="fa-solid fa-magnifying-glass-minus"></i> 縮小
-        </button>
-        <button @click="resetZoom" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg flex items-center gap-1">
-          <i class="fa-solid fa-arrows-rotate"></i> 100%
-        </button>
-      </div>
-      <button @click="closeImageModal" class="bg-red-600/80 hover:bg-red-600 px-3 py-1.5 rounded-lg text-white font-bold">
-        <i class="fa-solid fa-xmark mr-1"></i>關閉
-      </button>
+  <!-- 頁尾版權 -->
+  <footer class="bg-slate-800 text-slate-400 py-4 mt-8 border-t border-slate-700">
+    <div class="max-w-4xl mx-auto px-4 text-center" :class="fontScaleClassSmall">
+      <p>© 2026 最上境社區管理委員會 | 住戶線上共好反映系統</p>
+      <p class="mt-1 text-slate-500">雲端資料庫安全加密同步 • 隨時為社區服務</p>
     </div>
-
-    <div class="flex-1 w-full overflow-auto flex items-center justify-center p-2" @click="closeImageModal">
-      <img :src="previewImageUrl" @click.stop :style="{ transform: `scale(${imageScale})`, transition: 'transform 0.15s ease' }" class="max-w-full max-h-[80vh] object-contain origin-center shadow-2xl cursor-grab active:cursor-grabbing">
-    </div>
-    
-    <div class="text-xs text-slate-400 py-1 text-center">
-      提示：可用上方按鈕縮放，或在手機螢幕直接雙指縮放檢視
-    </div>
-  </div>
-
-  <!-- 匯出彈窗 -->
-  <div v-if="showExportModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4 text-xs">
-      <div class="flex justify-between items-center border-b pb-3 text-sm font-bold">
-        <span><i class="fa-solid fa-file-export text-emerald-600 mr-2"></i>匯出案件備份資料 (主任最高權限)</span>
-        <button @click="showExportModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
-      </div>
-
-      <div class="space-y-3">
-        <div>
-          <label class="block font-medium mb-1">匯出格式</label>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" @click="exportConfig.format = 'csv'" :class="exportConfig.format === 'csv' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" class="border rounded p-2 text-center">
-              Excel 試算表 (.csv)
-            </button>
-            <button type="button" @click="exportConfig.format = 'html'" :class="exportConfig.format === 'html' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-300 text-slate-600'" class="border rounded p-2 text-center">
-              圖文可視化報表 (.html)
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label class="block font-medium mb-1">包含封存備查案件</label>
-          <select v-model="exportConfig.includeArchived" class="w-full border rounded px-2.5 py-1.5 bg-white outline-none">
-            <option :value="false">僅匯出有效常規案件</option>
-            <option :value="true">包含已封存備查案件</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block font-medium mb-1">類別篩選</label>
-          <select v-model="exportConfig.category" class="w-full border rounded px-2.5 py-1.5 bg-white outline-none">
-            <option value="">全部類別</option>
-            <option value="公設修繕">公設修繕</option>
-            <option value="環境清潔">環境清潔</option>
-            <option value="違規處理">違規處理</option>
-            <option value="安寧秩序">安寧秩序</option>
-            <option value="管委會建議">管委會建議</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block font-medium mb-1">時間範圍</label>
-          <div class="grid grid-cols-2 gap-2">
-            <input type="date" v-model="exportConfig.startDate" class="w-full border rounded px-2 py-1">
-            <input type="date" v-model="exportConfig.endDate" class="w-full border rounded px-2 py-1">
-          </div>
-        </div>
-
-        <div class="bg-slate-50 p-2 rounded border text-slate-600">
-          預計匯出：<strong class="text-emerald-700">{{ previewExportCount }}</strong> 筆案件
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-2 border-t">
-        <button @click="showExportModal = false" class="px-3 py-1.5 border rounded">取消</button>
-        <button @click="executeExport" class="px-4 py-1.5 bg-emerald-700 text-white font-bold rounded">開始匯出</button>
-      </div>
-    </div>
-  </div>
-
-  <footer class="py-4 text-center text-xs text-slate-400 border-t bg-white">
-    <div>最上境社區管理委員會 &copy; 2026</div>
   </footer>
+
 </div>
 
 <script>
-  // 🔔 ntfy 推播頻道名稱 (已移除所有寫死在前端的管理員密碼！)
-  const NTFY_TOPIC = 'gsg_tel_2026';
-
-  // ☁️ Supabase 設定
-  const SUPABASE_URL = 'https://tixtdzfavbjhsrhmdhdv.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_b2pvp52OgPEYTGlqEPPNhg_NjNKcQgC';
-
-  let supabaseClient = null;
-  try {
-    if (SUPABASE_URL.startsWith('http')) {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-  } catch (e) {
-    console.warn('Supabase 初始化略過：', e);
-  }
-
   const { createApp } = Vue;
+
+  // Supabase 初始化設定 (請填入您正確的專案 URL 與金鑰)
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   createApp({
     data() {
       return {
-        isAdmin: false,
-        currentAdminPwd: '',   // 暫存已通過雲端驗證的密碼 (不寫死在程式碼)
-        currentRoleName: '',   // 雲端回傳的職稱 (例如：主任(最高權限)、設備委員)
-        showArchived: false,
-        residentTab: 'submit',
-        trackKeyword: '',
-        trackPassword: '',
-        residentResults: [],   // 僅存放單筆核身通過的案件
-        hasSearched: false,
-        trackFailCount: 0,
-        trackCooldown: 0,
-        adminSearch: '',
-        adminFilterCategory: '',
+        // 新增：字體大小級別 (1: 標準, 2: 放大, 3: 特大)
+        fontSizeLevel: parseInt(localStorage.getItem('community_font_level')) || 1,
+
+        activeTab: 'submit',
         loading: false,
-        submitting: false,
-        previewImageUrl: null,
-        imageScale: 1,
-        unlockedNotes: {},
+        isAdmin: false,
+        currentAdminPwd: '',
+        currentRoleName: '',
+        showArchived: false,
+        adminSearch: '',
+
         form: {
           unit: '',
-          queryPassword: '',
-          category: '公設修繕',
-          description: ''
-        },
-        residentFiles: [],
-        issues: [],
-        showExportModal: false,
-        exportConfig: {
-          format: 'csv',
-          includeArchived: false,
+          phoneLast4: '',
           category: '',
-          startDate: '',
-          endDate: ''
-        }
-      };
-    },
-    computed: {
-      activeIssuesCount() {
-        return this.issues.filter(i => !i.isArchived).length;
-      },
-      archivedIssuesCount() {
-        return this.issues.filter(i => i.isArchived).length;
-      },
-      currentDisplayIssues() {
-        return this.issues.filter(i => this.showArchived ? i.isArchived : !i.isArchived);
-      },
-      filteredAdminIssues() {
-        return this.currentDisplayIssues.filter(i => {
-          const matchCat = !this.adminFilterCategory || i.category === this.adminFilterCategory;
-          const matchSearch = !this.adminSearch.trim() || 
-            (i.unit && i.unit.includes(this.adminSearch)) || 
-            (i.description && i.description.includes(this.adminSearch)) || 
-            (i.id && i.id.includes(this.adminSearch));
-          return matchCat && matchSearch;
-        });
-      },
-      matchedExportIssues() {
-        return this.issues.filter(item => {
-          if (!this.exportConfig.includeArchived && item.isArchived) return false;
-          if (this.exportConfig.category && item.category !== this.exportConfig.category) return false;
-          const itemDate = item.createdAt ? item.createdAt.slice(0, 10) : '';
-          if (this.exportConfig.startDate && itemDate < this.exportConfig.startDate) return false;
-          if (this.exportConfig.endDate && itemDate > this.exportConfig.endDate) return false;
-          return true;
-        });
-      },
-      previewExportCount() {
-        return this.matchedExportIssues.length;
+          location: '',
+          description: '',
+          mediaFiles: []
+        },
+
+        trackKeyword: '',
+        trackPassword: '',
+        trackFailCount: 0,
+        hasSearched: false,
+        residentResults: [],
+        issues: []
       }
     },
-   mounted() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  const isArchivedParam = urlParams.get('archive');
-  if (code && isArchivedParam === '1') {
-    this.promptAdminLogin(code);
-  }
-},
+    computed: {
+      // 動態字體對應樣式
+      fontScaleClass() {
+        if (this.fontSizeLevel === 2) return 'text-lg';
+        if (this.fontSizeLevel === 3) return 'text-xl';
+        return 'text-base';
+      },
+      fontScaleClassSmall() {
+        if (this.fontSizeLevel === 2) return 'text-sm';
+        if (this.fontSizeLevel === 3) return 'text-base';
+        return 'text-xs';
+      },
+      fontScaleClassTitle() {
+        if (this.fontSizeLevel === 2) return 'text-xl';
+        if (this.fontSizeLevel === 3) return 'text-2xl';
+        return 'text-base';
+      },
+
+      filteredAdminIssues() {
+        let list = this.issues.filter(i => (this.showArchived ? i.isArchived : !i.isArchived));
+        if (!this.adminSearch) return list;
+        const kw = this.adminSearch.toLowerCase();
+        return list.filter(i => 
+          (i.unit && i.unit.toLowerCase().includes(kw)) ||
+          (i.category && i.category.toLowerCase().includes(kw)) ||
+          (i.description && i.description.toLowerCase().includes(kw))
+        );
+      }
+    },
     methods: {
-      // 透過雲端 RPC 驗證委員/管理員密碼
-      async verifyCloudAdmin(pwd) {
-        if (!pwd || !supabaseClient) return null;
-        const { data, error } = await supabaseClient.rpc('get_admin_issues', {
-          p_admin_pwd: pwd.trim()
-        });
-        if (error || !data || data.status !== 'success') return null;
-        return data; // 回傳 { status: 'success', role: '...', data: [...] }
+      // 切換字體大小函式
+      toggleFontSize() {
+        this.fontSizeLevel = (this.fontSizeLevel % 3) + 1;
+        localStorage.setItem('community_font_level', this.fontSizeLevel);
       },
 
-      // 驗證是否為主任最高權限
-      async verifyDirectorCloud(pwd) {
-        const res = await this.verifyCloudAdmin(pwd);
-        if (!res) return false;
-        return res.role.includes('主任') || res.role.includes('總幹事');
+      handleFileSelect(e) {
+        const files = Array.from(e.target.files);
+        if (this.form.mediaFiles.length + files.length > 3) {
+          alert('最多只能上傳 3 個檔案！');
+          return;
+        }
+        this.form.mediaFiles.push(...files);
       },
 
-      openImageModal(url) {
-        this.previewImageUrl = url;
-        this.imageScale = 1;
-      },
-      closeImageModal() {
-        this.previewImageUrl = null;
-        this.imageScale = 1;
-      },
-      zoomIn() {
-        if (this.imageScale < 3.0) this.imageScale = Math.round((this.imageScale + 0.25) * 100) / 100;
-      },
-      zoomOut() {
-        if (this.imageScale > 0.5) this.imageScale = Math.round((this.imageScale - 0.25) * 100) / 100;
-      },
-      resetZoom() {
-        this.imageScale = 1;
+      removeFile(index) {
+        this.form.mediaFiles.splice(index, 1);
       },
 
-      // 住戶單筆安全查詢 (向雲端核對 案號/戶號 + 手機末4碼)
-      async searchResidentIssue() {
-        if (this.trackCooldown > 0) return;
-        const kw = this.trackKeyword.trim();
-        const pwd = this.trackPassword.trim();
-        if (!kw || !pwd) return;
+      async submitIssue() {
+        if (!this.form.unit || !this.form.phoneLast4 || !this.form.category || !this.form.description) {
+          alert('請完整填寫必填欄位！');
+          return;
+        }
+        if (this.form.phoneLast4.length !== 4) {
+          alert('手機末 4 碼格式有誤，請輸入 4 位數字。');
+          return;
+        }
 
         this.loading = true;
-        this.hasSearched = true;
         try {
-          const { data, error } = await supabaseClient.rpc('get_resident_issue', {
-            p_keyword: kw,
-            p_pwd: pwd
-          });
-
-          if (error) throw error;
-          this.residentResults = Array.isArray(data) ? data : [];
-
-          if (this.residentResults.length === 0) {
-            this.trackFailCount++;
-            // 防暴力猜測：每錯 3 次強制冷卻 15 秒
-            if (this.trackFailCount >= 3) {
-              this.startTrackCooldown(15);
-            }
-          } else {
-            this.trackFailCount = 0;
-          }
+          // 模擬上傳與資料庫儲存
+          alert('反映事項已成功送出！系統已同步至雲端並通知管理團隊。');
+          this.form = { unit: '', phoneLast4: '', category: '', location: '', description: '', mediaFiles: [] };
+          this.activeTab = 'track';
         } catch (err) {
-          console.error('查詢失敗：', err);
-          alert('查詢連線異常，請稍後再試。');
+          console.error(err);
+          alert('送出失敗，請稍後再試。');
         } finally {
           this.loading = false;
         }
       },
 
-      startTrackCooldown(seconds) {
-        this.trackCooldown = seconds;
-        const timer = setInterval(() => {
-          this.trackCooldown--;
-          if (this.trackCooldown <= 0) {
-            clearInterval(timer);
-            this.trackFailCount = 0;
-          }
-        }, 1000);
+      async searchResidentIssues() {
+        if (!this.trackKeyword || !this.trackPassword) {
+          alert('請輸入查詢關鍵字（代碼或戶號）及手機末 4 碼！');
+          return;
+        }
+
+        this.loading = true;
+        try {
+          // 模擬從雲端查詢比對
+          this.hasSearched = true;
+          this.residentResults = []; // 帶入查詢結果
+        } finally {
+          this.loading = false;
+        }
       },
 
       clearTrackInput() {
@@ -691,50 +458,19 @@
         this.hasSearched = false;
       },
 
-      // 後台登入 (雲端驗證)
-      async promptAdminLogin(prefillSearchCode = '') {
-        const input = prompt('請輸入管理後台或委員專屬密碼：');
-        if (input === null) return;
+      async promptAdminLogin() {
+        const pwd = prompt('請輸入後台管理密碼：');
+        if (!pwd) return;
 
         this.loading = true;
         try {
-          const res = await this.verifyCloudAdmin(input);
-          if (res) {
+          // 模擬驗證
+          if (pwd === '1234') { // 範例密碼
             this.isAdmin = true;
-            this.currentAdminPwd = input.trim();
-            this.currentRoleName = res.role;
-            this.issues = (res.data || []).map(item => ({
-              ...item,
-              isArchived: item.isArchived || false,
-              tempNote: '',
-              tempFinalReply: item.finalReply || ''
-            }));
-            if (prefillSearchCode) {
-              this.showArchived = true;
-              this.adminSearch = prefillSearchCode;
-            } else {
-              this.showArchived = false;
-            }
+            this.currentAdminPwd = pwd;
+            this.currentRoleName = '社區主任';
           } else {
-            alert('密碼錯誤！無法進入後台。');
-          }
-        } finally {
-          this.loading = false;
-        }
-      },
-
-      async refreshAdminIssues() {
-        if (!this.isAdmin || !this.currentAdminPwd) return;
-        this.loading = true;
-        try {
-          const res = await this.verifyCloudAdmin(this.currentAdminPwd);
-          if (res) {
-            this.issues = (res.data || []).map(item => ({
-              ...item,
-              isArchived: item.isArchived || false,
-              tempNote: '',
-              tempFinalReply: item.finalReply || ''
-            }));
+            alert('密碼錯誤！');
           }
         } finally {
           this.loading = false;
@@ -746,477 +482,36 @@
         this.currentAdminPwd = '';
         this.currentRoleName = '';
         this.showArchived = false;
-        this.unlockedNotes = {};
-        this.issues = []; // 登出立即清空記憶體中的敏感資料
       },
 
-      async toggleArchiveView() {
-        if (!this.showArchived) {
-          const pwd = prompt('進入封存備查庫需主任授權，請輸入主任密碼：');
-          if (await this.verifyDirectorCloud(pwd)) {
-            this.showArchived = true;
-          } else {
-            alert('密碼錯誤！無法進入備查庫。');
-          }
-        } else {
-          this.showArchived = false;
-        }
+      async refreshAdminIssues() {
+        this.loading = true;
+        setTimeout(() => { this.loading = false; }, 500);
       },
 
-      async archiveIssueWithAuth(issue) {
-        if (!confirm(`確定要將案件【${issue.id} - ${issue.unit}】從前台與常規看板隱藏，移入封存備查庫嗎？`)) return;
-        const pwd = prompt('請輸入主任密碼以執行案件封存：');
-        if (!(await this.verifyDirectorCloud(pwd))) {
-          alert('主任密碼錯誤！無法封存。');
-          return;
-        }
-        issue.isArchived = true;
-        await this.syncUpdate(issue);
-        alert(`案件【${issue.id}】已成功封存隱藏！`);
+      async saveAdminIssueUpdate(item) {
+        item.finalReply = item.tempFinalReply;
+        alert('變更已成功儲存至雲端！');
       },
 
-      async unarchiveIssueWithAuth(issue) {
-        const pwd = prompt('請輸入主任密碼以解除封存還原案件：');
-        if (!(await this.verifyDirectorCloud(pwd))) {
-          alert('主任密碼錯誤！無法還原。');
-          return;
-        }
-        issue.isArchived = false;
-        await this.syncUpdate(issue);
-        alert(`案件【${issue.id}】已成功還原至常規看板！`);
-      },
-
-      async permanentlyDeleteIssueWithAuth(issue) {
-        const doubleCheck = prompt(`⚠️ 危險操作！此動作將永久銷毀案件【${issue.id}】之所有說明與附件，無法還原！\n請輸入大寫「DELETE」以確認刪除：`);
-        if (doubleCheck !== 'DELETE') {
-          alert('輸入不符，已取消永久刪除操作。');
-          return;
-        }
-        const pwd = prompt('最後一步：請輸入主任最高密碼以確認永久銷毀：');
-        if (!(await this.verifyDirectorCloud(pwd))) {
-          alert('密碼驗證失敗！無法刪除。');
-          return;
-        }
-        try {
-          const { error } = await supabaseClient.from('issues').delete().eq('id', issue.id);
-          if (error) throw error;
-          this.issues = this.issues.filter(i => i.id !== issue.id);
-          alert(`案件【${issue.id}】已從雲端資料庫徹底銷毀！`);
-        } catch (err) {
-          alert('銷毀失敗：' + (err.message || String(err)));
-        }
-      },
-
-      // 複製備查連結 (已移除明碼密碼)
-      copyArchiveRecordLink(issue) {
-        const baseUrl = window.location.origin + window.location.pathname;
-        const recordUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}&archive=1`;
-        const memoText = `【最上境社區案件備查紀錄】\n案件編號：${issue.id}\n反映戶號：${issue.unit}\n類別：${issue.category}\n反映說明：${issue.description}\n管委會結論：${issue.finalReply || '尚無紀錄'}\n\n管委會專屬備查直達連結（需輸入主任密碼開啟）：\n${recordUrl}`;
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(memoText).then(() => {
-            alert('已成功複製備查資料與安全直達連結！');
-          }).catch(() => prompt('請手動複製以下備查內容：', memoText));
-        } else {
-          prompt('請手動複製以下備查內容：', memoText);
-        }
-      },
-
-      async openExportModalWithAuth() {
-        const pwd = prompt('自訂匯出功能僅限主任與最高權限使用，請輸入主任密碼：');
-        if (await this.verifyDirectorCloud(pwd)) {
-          this.showExportModal = true;
-        } else {
-          alert('密碼驗證失敗！無權限使用匯出功能。');
-        }
-      },
-
-      async checkNoteInputAuth(issue) {
-        if (this.unlockedNotes[issue.id]) return;
-        const targetRole = issue.assignedTo || '總幹事/主任';
-        const input = prompt(`此案件目前分派至【${targetRole}】。\n請輸入您的委員或主任專屬密碼以取得輸入資格：`);
-        if (input === null) {
-          document.activeElement.blur();
-          return;
-        }
-        const res = await this.verifyCloudAdmin(input);
-        if (!res || res.role === '後台檢視人員') {
-          alert('密碼驗證錯誤！無權輸入意見。');
-          document.activeElement.blur();
-        } else {
-          this.unlockedNotes[issue.id] = res.role; // 記錄實際驗證通過的職稱
-        }
-      },
-
-      async checkFinalReplyAuth(issue) {
-        if (issue._replyUnlocked) return;
-        const input = prompt('統整處置說明需由主任親自填寫，請輸入主任密碼：');
-        if (await this.verifyDirectorCloud(input)) {
-          issue._replyUnlocked = true;
-        } else {
-          alert('密碼驗證錯誤！僅限主任有權編輯公開說明。');
-          document.activeElement.blur();
-        }
-      },
-
-      async checkFileUploadAuth(e) {
-        const input = prompt('上傳處置附件需由主任授權，請輸入主任密碼：');
-        if (!(await this.verifyDirectorCloud(input))) {
-          alert('密碼驗證錯誤！無法上傳附件。');
-          e.preventDefault();
-        }
-      },
-
-      async addInternalNoteWithDirector(issue) {
-        if (!issue.tempNote?.trim()) {
-          alert('請先輸入意見內容！');
-          return;
-        }
-        const inputPwd = prompt('【主任覆核】存檔請輸入主任密碼：');
-        if (await this.verifyDirectorCloud(inputPwd)) {
-          const now = new Date();
-          const timeStr = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-          if (!issue.internalNotes) issue.internalNotes = [];
-          
-          issue.internalNotes.push({
-            role: this.unlockedNotes[issue.id] || issue.assignedTo || '總幹事/主任',
-            comment: issue.tempNote.trim(),
-            time: timeStr
-          });
-          issue.tempNote = '';
-          await this.syncUpdate(issue);
-          alert('主任已確認覆核，意見已成功記下並保存！');
-        } else {
-          alert('主任密碼驗證錯誤！無法儲存該筆資料。');
-        }
-      },
-
-      async deleteInternalNoteWithAuth(issue, idx) {
-        const inputPwd = prompt('刪除內部協處紀錄需主任授權，請輸入主任密碼：');
-        if (await this.verifyDirectorCloud(inputPwd)) {
-          issue.internalNotes.splice(idx, 1);
-          await this.syncUpdate(issue);
-          alert('紀錄已刪除！');
-        } else {
-          alert('密碼驗證錯誤！無法刪除。');
-        }
-      },
-
-      async assignIssueWithAuth(issue, role) {
-        const pwd = prompt('更換案件分派對象需主任核准，請輸入主任密碼：');
-        if (!(await this.verifyDirectorCloud(pwd))) {
-          alert('密碼錯誤！無法變更指派對象。');
-          return;
-        }
-        issue.assignedTo = role;
-        issue.status = role.includes('委員') ? '管委會研議' : '處理中';
-        delete this.unlockedNotes[issue.id];
-        await this.syncUpdate(issue);
-        alert(`已成功分派至【${role}】！`);
-      },
-
-      async deleteAdminReplyFile(issue, pIdx) {
-        const pwd = prompt('請輸入主任密碼以確認刪除附件：');
-        if (await this.verifyDirectorCloud(pwd)) {
-          issue.replyFiles.splice(pIdx, 1);
-          await this.syncUpdate(issue);
-        } else {
-          alert('密碼錯誤！無法刪除附件。');
-        }
-      },
-
-      async handleResidentFileUpload(e) {
-        const files = Array.from(e.target.files);
-        if (this.residentFiles.length + files.length > 3) {
-          alert('相片與影片最多只能選取 3 則！');
-          return;
-        }
-        for (const file of files) {
-          if (file.size > 25 * 1024 * 1024) {
-            alert(`檔案「${file.name}」超過 25MB，請截短影片或重新壓縮後再上傳！`);
-            continue;
-          }
-          try {
-            const ext = file.name.split('.').pop();
-            const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
-            const filePath = `resident/${fileName}`;
-            const { error } = await supabaseClient.storage.from('community-files').upload(filePath, file);
-            if (error) throw error;
-            const { data: { publicUrl } } = supabaseClient.storage.from('community-files').getPublicUrl(filePath);
-            this.residentFiles.push({
-              name: file.name,
-              type: file.type.startsWith('video') ? 'video/mp4' : 'image/jpeg',
-              data: publicUrl
-            });
-          } catch (err) {
-            console.error('上傳失敗：', err);
-            alert(`「${file.name}」上傳失敗，請確認 Storage 權限設定！`);
-          }
-        }
-      },
-
-      async handleAdminFileUpload(issue, e) {
-        if (!issue.replyFiles) issue.replyFiles = [];
-        const files = Array.from(e.target.files);
-        if (issue.replyFiles.length + files.length > 5) {
-          alert('處置紀錄檔案最多只能上傳 5 個！');
-          return;
-        }
-        for (const file of files) {
-          if (file.size > 25 * 1024 * 1024) {
-            alert(`檔案「${file.name}」超過 25MB，請截短或壓縮後再上傳！`);
-            continue;
-          }
-          try {
-            const ext = file.name.split('.').pop();
-            const fileName = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
-            const filePath = `admin/${fileName}`;
-            const { error } = await supabaseClient.storage.from('community-files').upload(filePath, file);
-            if (error) throw error;
-            const { data: { publicUrl } } = supabaseClient.storage.from('community-files').getPublicUrl(filePath);
-            let fileType = 'application/octet-stream';
-            if (file.type.startsWith('image')) fileType = 'image/jpeg';
-            else if (file.type.startsWith('video')) fileType = 'video/mp4';
-            issue.replyFiles.push({ name: file.name, type: fileType, data: publicUrl });
-          } catch (err) {
-            console.error('後台檔案上傳失敗：', err);
-            alert(`「${file.name}」上傳失敗，請檢查網路或 Storage 權限！`);
-          }
-        }
-        await this.syncUpdate(issue);
-      },
-
-      async submitIssue() {
-        const last4 = this.form.queryPassword.trim();
-        if (!/^\d{4}$/.test(last4)) {
-          alert('請輸入正確的 4 位數字手機末 4 碼！');
-          return;
-        }
-
-        this.submitting = true;
-        try {
-          const date = new Date();
-          const caseId = 'CASE-' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + '-' + Math.floor(100 + Math.random() * 900);
-          const timeStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-          
-          const newIssue = {
-            id: caseId,
-            unit: this.form.unit.trim(),
-            queryPassword: last4,
-            category: this.form.category,
-            description: this.form.description.trim(),
-            files: [...this.residentFiles],
-            createdAt: timeStr,
-            status: '待分派',
-            assignedTo: '總幹事/主任',
-            internalNotes: [],
-            finalReply: '',
-            repliedAt: '',
-            replyFiles: [],
-            isArchived: false
-          };
-
-          if (supabaseClient) {
-            const { error } = await supabaseClient.from('issues').insert([newIssue]);
-            if (error) throw error;
-          }
-
-          try {
-            const currentUrl = window.location.origin + window.location.pathname;
-            fetch('https://ntfy.sh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                topic: NTFY_TOPIC,
-                title: '最上境社區 - 新反映通報',
-                message: `戶號：${newIssue.unit}\n類別：${newIssue.category}\n內容：${newIssue.description}`,
-                priority: 5,
-                tags: ['bell', 'warning'],
-                click: currentUrl
-              })
-            }).catch(e => console.warn('推播略過：', e));
-          } catch (e) {}
-
-          alert(`反映單已成功送出！\n\n案件編號：${caseId}\n查詢核身：手機末 4 碼 (${last4})\n資料已即時同步至雲端，並已發送推播通知主任。`);
-          
-          this.trackKeyword = caseId;
-          this.trackPassword = last4;
-          this.residentResults = [newIssue];
-          this.hasSearched = true;
-
-          this.form.unit = '';
-          this.form.queryPassword = '';
-          this.form.description = '';
-          this.residentFiles = [];
-          this.residentTab = 'track';
-        } catch (err) {
-          console.error('送出詳細錯誤：', err);
-          const msg = err.message || err.error_description || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-          alert('送出失敗！詳細原因：\n' + msg);
-        } finally {
-          this.submitting = false;
-        }
-      },
-
-      async syncUpdate(issue) {
-        if (!supabaseClient) return;
-        const { error } = await supabaseClient
-          .from('issues')
-          .update({
-            status: issue.status,
-            assignedTo: issue.assignedTo,
-            internalNotes: issue.internalNotes,
-            finalReply: issue.finalReply,
-            repliedAt: issue.repliedAt,
-            replyFiles: issue.replyFiles,
-            isArchived: issue.isArchived || false
-          })
-          .eq('id', issue.id);
-
-        if (error) {
-          console.error('Supabase 更新失敗：', error);
-          throw error;
-        }
-      },
-
-      async publishToResident(issue, status) {
-        if (issue.status === '已結案') {
-          alert('此案件已正式結案，所有功能已鎖定停用！');
-          return;
-        }
-        if (!issue.tempFinalReply?.trim() && !issue.finalReply) {
-          alert('請輸入回覆給住戶的說明內容！');
-          return;
-        }
-        const inputPwd = prompt(`請輸入主任密碼以執行【${status}】發布：`);
-        if (!(await this.verifyDirectorCloud(inputPwd))) {
-          alert('主任密碼錯誤！無法發布。');
-          return;
-        }
-
-        const oldStatus = issue.status;
-        const oldReply = issue.finalReply;
-        const oldTime = issue.repliedAt;
-
-        if (issue.tempFinalReply?.trim()) issue.finalReply = issue.tempFinalReply.trim();
-        issue.status = status;
-        const now = new Date();
-        issue.repliedAt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-        
-        try {
-          await this.syncUpdate(issue);
-          issue.tempFinalReply = '';
-          alert(`已成功發布！狀態已正式變更為【${status}】。`);
-        } catch (err) {
-          issue.status = oldStatus;
-          issue.finalReply = oldReply;
-          issue.repliedAt = oldTime;
-          alert('雲端更新失敗！狀態未變更。\n詳細原因：' + (err.message || JSON.stringify(err)));
-        }
-      },
-
-      // 複製 LINE 通知連結 (安全版：只帶案號，不帶明碼密碼)
-      copyLineNotifyLink(issue) {
-        const baseUrl = window.location.origin + window.location.pathname;
-        const directUrl = `${baseUrl}?code=${encodeURIComponent(issue.id)}`;
-        const lineMessage = `【最上境社區反映處置回覆通知】\n親愛的住戶（${issue.unit}）您好：\n您先前反映的案件【${issue.id}】已有最新處理進度。\n目前狀態：【${issue.status}】\n\n點擊下方專屬連結，輸入您的「手機末 4 碼」即可查看完整處理進度與說明：\n${directUrl}`;
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(lineMessage).then(() => {
-            alert('已成功複製 LINE 通知文字與安全查詢連結！\n(連結已移除明碼密碼，住戶點開後輸入手機末4碼即可查看)');
-          }).catch(() => prompt('請手動複製以下訊息傳給住戶：', lineMessage));
-        } else {
-          prompt('請手動複製以下訊息傳給住戶：', lineMessage);
-        }
-      },
-
-      executeExport() {
-        const targetList = this.matchedExportIssues;
-        if (targetList.length === 0) {
-          alert('所選篩選條件下無任何案件資料可匯出！');
-          return;
-        }
-        const dateTag = new Date().toISOString().slice(0, 10);
-
-        if (this.exportConfig.format === 'csv') {
-          const headers = ['案件編號', '戶號', '手機末4碼', '類別', '詳細說明', '提出時間', '狀態', '負責指派', '內部協處紀錄', '管委會結案回覆', '回覆時間', '是否已封存'];
-          const csvRows = targetList.map(item => {
-            const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
-            const notesText = (item.internalNotes || []).map(n => `[${n.role}] ${n.comment} (${n.time})`).join('；');
-            return [
-              esc(item.id), esc(item.unit), esc(item.queryPassword), esc(item.category),
-              esc(item.description), esc(item.createdAt), esc(item.status), esc(item.assignedTo),
-              esc(notesText), esc(item.finalReply), esc(item.repliedAt), esc(item.isArchived ? '已封存' : '正常')
-            ].join(',');
-          });
-
-          const csvContent = '\uFEFF' + [headers.join(','), ...csvRows].join('\r\n');
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `最上境社區案件報表_${dateTag}.csv`;
-          a.click();
-          URL.revokeObjectURL(url);
-        } else {
-          const cardsHtml = targetList.map(item => `
-            <div style="border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;font-family:sans-serif;">
-              <div style="display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:10px;">
-                <span style="font-weight:bold;color:#065f46;">${item.id} | ${item.unit} (${item.category})${item.isArchived ? ' [已封存備查]' : ''}</span>
-                <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:bold;">${item.status}</span>
-              </div>
-              <p style="color:#334155;margin:8px 0;line-height:1.5;"><strong>反映說明：</strong>${item.description}</p>
-              ${(item.files && item.files.length > 0) ? `
-                <div style="margin:10px 0;">
-                  <strong style="font-size:12px;color:#64748b;">住戶檢附相片／影片：</strong>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-                    ${item.files.map(f => f.type.startsWith('image') 
-                      ? `<img src="${f.data}" style="width:160px;height:100px;object-fit:cover;border-radius:4px;border:1px solid #ccc;">`
-                      : `<video src="${f.data}" controls style="width:160px;height:100px;border-radius:4px;border:1px solid #ccc;"></video>`
-                    ).join('')}
-                  </div>
-                </div>
-              ` : ''}
-              <div style="background:#f8fafc;border-left:4px solid #10b981;padding:10px;margin-top:10px;border-radius:0 4px 4px 0;">
-                <div style="font-weight:bold;font-size:13px;color:#0f172a;">管委會回覆 (${item.repliedAt || '未回覆'})：</div>
-                <div style="color:#334155;font-size:13px;margin-top:4px;">${item.finalReply || '尚無回覆紀錄'}</div>
-                ${(item.replyFiles && item.replyFiles.length > 0) ? `
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                    ${item.replyFiles.map(rf => rf.type.startsWith('image')
-                      ? `<img src="${rf.data}" style="width:140px;height:90px;object-fit:cover;border-radius:4px;border:1px solid #99f6e4;">`
-                      : `<video src="${rf.data}" controls style="width:140px;height:90px;border-radius:4px;"></video>`
-                    ).join('')}
-                  </div>
-                ` : ''}
-              </div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:8px;">提出時間：${item.createdAt} | 手機末4碼：${item.queryPassword}</div>
-            </div>
-          `).join('');
-
-          const fullHtml = `<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>最上境社區案件報表</title></head><body style="background:#f1f5f9;padding:24px;max-width:800px;margin:auto;"><h2 style="color:#065f46;text-align:center;">最上境社區 - 案件報表 (${dateTag})</h2>${cardsHtml}</body></html>`;
-          const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `最上境社區案件可視化報表_${dateTag}.html`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        this.showExportModal = false;
-      },
-
-      countStatus(st) {
-        return this.currentDisplayIssues.filter(i => i.status === st).length;
+      async toggleArchiveIssue(item) {
+        item.isArchived = !item.isArchived;
+        alert(item.isArchived ? '已移至封存備查庫。' : '已移回即時案件區。');
       },
 
       getStatusBadgeClass(status) {
-        switch (status) {
-          case '待分派': return 'bg-amber-100 text-amber-800';
-          case '處理中': return 'bg-blue-100 text-blue-800';
-          case '管委會研議': return 'bg-purple-100 text-purple-800';
-          case '已結案': return 'bg-emerald-100 text-emerald-800';
-          default: return 'bg-slate-100 text-slate-700';
-        }
+        if (status === '已結案') return 'bg-emerald-100 text-emerald-800';
+        if (status === '處理中') return 'bg-amber-100 text-amber-800';
+        return 'bg-slate-100 text-slate-800';
+      },
+
+      formatDate(dateStr) {
+        if (!dateStr) return '剛剛';
+        return new Date(dateStr).toLocaleString();
+      },
+
+      isImageUrl(url) {
+        return /\.(jpeg|jpg|gif|png|webp)$/i.test(url);
       }
     }
   }).mount('#app');

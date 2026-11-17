@@ -528,6 +528,21 @@
 
   createApp({
     data() {
+      // 字體大小控制
+        const fontLevel = ref(0);
+        const fontSizeOptions = [16, 18, 20];
+        const fontSizeLabels = ['標準', '大', '特大'];
+        const fontSizeNames = ['切換至大字體', '切換至特大字體', '切換至標準字體'];
+
+        const currentFontSize = computed(() => fontSizeOptions[fontLevel.value]);
+        const toggleFontSize = () => {
+          fontLevel.value = (fontLevel.value + 1) % fontSizeOptions.length;
+        };
+      fontLevel,
+          currentFontSize,
+          toggleFontSize,
+          fontSizeLabels,
+          fontSizeNames,
       return {
         isAdmin: false,
         currentAdminPwd: '',   // 暫存已通過雲端驗證的密碼 (不寫死在程式碼)
